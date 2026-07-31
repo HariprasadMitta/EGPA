@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { canAccessDeveloperTools, useAuth } from "@/lib/auth";
 import { useStore } from "@/lib/store";
+import { readSseEvents } from "@/lib/sse";
 import { RiskBadge } from "@/components/RiskBadge";
 import { PipelineTrain } from "@/components/PipelineTrain";
 import { ArchitectureDiagram } from "@/components/ArchitectureDiagram";
@@ -34,7 +35,21 @@ function makeExecutionId(): string {
   return `exec-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-function ExecutionCard({ run, isLive }: { run: ExecutionRun; isLive: boolean }) {
+interface PlanStepDraft {
+  name: string;
+  tool: string;
+  task: string;
+}
+
+function ExecutionCard({
+  run,
+  isLive,
+  liveOutput,
+}: {
+  run: ExecutionRun;
+  isLive: boolean;
+  liveOutput: Record<string, string>;
+}) {
   return (
     <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -65,32 +80,39 @@ function ExecutionCard({ run, isLive }: { run: ExecutionRun; isLive: boolean }) 
       <p className="mt-3 text-sm">{run.masterAgentSummary}</p>
 
       <div className="mt-4 space-y-3">
-        {run.steps.map((step) => (
-          <div key={step.id} className="rounded-lg border border-[var(--border)] bg-[var(--background)] p-4">
-            <div className="flex items-center gap-3">
-              <span
-                className={`flex h-6 w-6 flex-none items-center justify-center rounded-full border text-xs font-bold ${STATUS_STYLE[step.status]}`}
-              >
-                {STATUS_ICON[step.status]}
-              </span>
-              <div>
-                <p className="text-sm font-semibold">{step.name}</p>
-                <p className="text-xs text-[var(--muted)]">
-                  {step.tool} &middot; {step.task}
-                </p>
+        {run.steps.map((step) => {
+          const streaming = isLive && step.status === "running" ? liveOutput[step.id] : undefined;
+          const displayOutput = step.output ?? streaming;
+          return (
+            <div key={step.id} className="rounded-lg border border-[var(--border)] bg-[var(--background)] p-4">
+              <div className="flex items-center gap-3">
+                <span
+                  className={`flex h-6 w-6 flex-none items-center justify-center rounded-full border text-xs font-bold ${STATUS_STYLE[step.status]}`}
+                >
+                  {STATUS_ICON[step.status]}
+                </span>
+                <div>
+                  <p className="text-sm font-semibold">{step.name}</p>
+                  <p className="text-xs text-[var(--muted)]">
+                    {step.tool} &middot; {step.task}
+                  </p>
+                </div>
               </div>
+              {displayOutput && (
+                <p className="mt-3 text-sm leading-relaxed text-[var(--foreground)]">
+                  {displayOutput}
+                  {streaming !== undefined && <span className="status-blink">&#9611;</span>}
+                </p>
+              )}
+              {step.status === "done" && (
+                <p className="mt-2 text-xs text-[var(--muted)]">
+                  {step.provider} &middot; {step.inputTokens + step.outputTokens} tokens &middot; $
+                  {step.costUsd.toFixed(4)} &middot; {step.durationMs}ms
+                </p>
+              )}
             </div>
-            {step.output && (
-              <p className="mt-3 text-sm leading-relaxed text-[var(--foreground)]">{step.output}</p>
-            )}
-            {step.status === "done" && (
-              <p className="mt-2 text-xs text-[var(--muted)]">
-                {step.provider} &middot; {step.inputTokens + step.outputTokens} tokens &middot; $
-                {step.costUsd.toFixed(4)} &middot; {step.durationMs}ms
-              </p>
-            )}
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {run.status === "completed" && (
@@ -138,6 +160,9 @@ export default function ExecutionPage() {
   const [planning, setPlanning] = useState(false);
   const [planError, setPlanError] = useState<string | null>(null);
   const [currentExecutionId, setCurrentExecutionId] = useState<string | null>(null);
+  const [planningSummary, setPlanningSummary] = useState("");
+  const [planningSteps, setPlanningSteps] = useState<PlanStepDraft[]>([]);
+  const [liveOutput, setLiveOutput] = useState<Record<string, string>>({});
 
   if (!user) {
     return (
@@ -201,6 +226,9 @@ export default function ExecutionPage() {
     setRunning(true);
     setPlanning(true);
     setPlanError(null);
+    setPlanningSummary("");
+    setPlanningSteps([]);
+    setLiveOutput({});
 
     const executionId = makeExecutionId();
     const runNumber = executions.length + 1;
@@ -219,35 +247,65 @@ export default function ExecutionPage() {
           harnessPattern: recommendation.harnessPattern,
         }),
       });
-      const planData = await planRes.json();
-      setPlanning(false);
+
       if (!planRes.ok) {
-        setPlanError(planData.error || "Master agent planning failed.");
+        const data = await planRes.json().catch(() => ({}));
+        setPlanError(data.error || "Master agent planning failed.");
+        setRunning(false);
+        setPlanning(false);
+        setCurrentExecutionId(null);
+        return;
+      }
+
+      let masterAgentSummary = "";
+      const rawSteps: PlanStepDraft[] = [];
+      let planErrorMessage: string | null = null;
+
+      for await (const event of readSseEvents(planRes)) {
+        if (event.type === "summary") {
+          masterAgentSummary = event.text as string;
+          setPlanningSummary(masterAgentSummary);
+        } else if (event.type === "step") {
+          const step: PlanStepDraft = {
+            name: event.name as string,
+            tool: event.tool as string,
+            task: event.task as string,
+          };
+          rawSteps.push(step);
+          setPlanningSteps((prev) => [...prev, step]);
+        } else if (event.type === "error") {
+          planErrorMessage = event.error as string;
+        }
+      }
+
+      setPlanning(false);
+
+      if (planErrorMessage || rawSteps.length === 0) {
+        setPlanError(planErrorMessage || "Master agent returned no steps.");
         setRunning(false);
         setCurrentExecutionId(null);
         return;
       }
 
-      const steps: SubAgentStep[] = planData.steps.map(
-        (s: { name: string; tool: string; task: string }, i: number) => ({
-          id: `step-${i}`,
-          name: s.name,
-          tool: s.tool,
-          task: s.task,
-          status: "pending" as SubAgentStepStatus,
-          output: null,
-          provider: null,
-          inputTokens: 0,
-          outputTokens: 0,
-          costUsd: 0,
-          durationMs: 0,
-        })
-      );
+      const steps: SubAgentStep[] = rawSteps.map((s, i) => ({
+        id: `step-${i}`,
+        name: s.name,
+        tool: s.tool,
+        task: s.task,
+        status: "pending" as SubAgentStepStatus,
+        output: null,
+        provider: null,
+        inputTokens: 0,
+        outputTokens: 0,
+        costUsd: 0,
+        durationMs: 0,
+      }));
 
-      await startExecution(useCase.id, executionId, runNumber, planData.masterAgentSummary, steps);
+      await startExecution(useCase.id, executionId, runNumber, masterAgentSummary, steps);
 
       for (const step of steps) {
         await updateExecutionStep(useCase.id, executionId, step.id, { status: "running" });
+        setLiveOutput((prev) => ({ ...prev, [step.id]: "" }));
         try {
           const stepRes = await fetch("/api/execute-step", {
             method: "POST",
@@ -255,26 +313,46 @@ export default function ExecutionPage() {
             body: JSON.stringify({
               useCaseTitle: useCase.title,
               useCaseDescription: useCase.description,
-              masterAgentSummary: planData.masterAgentSummary,
+              masterAgentSummary,
               step: { name: step.name, tool: step.tool, task: step.task },
             }),
           });
-          const stepData = await stepRes.json();
+
           if (!stepRes.ok) {
+            const data = await stepRes.json().catch(() => ({}));
             await updateExecutionStep(useCase.id, executionId, step.id, {
               status: "error",
-              output: stepData.error || "Sub-agent execution failed.",
+              output: data.error || "Sub-agent execution failed.",
             });
             continue;
           }
+
+          let finalEvent: Record<string, unknown> | null = null;
+          for await (const event of readSseEvents(stepRes)) {
+            if (event.type === "token") {
+              const text = event.text as string;
+              setLiveOutput((prev) => ({ ...prev, [step.id]: (prev[step.id] ?? "") + text }));
+            } else if (event.type === "done" || event.type === "error") {
+              finalEvent = event;
+            }
+          }
+
+          if (!finalEvent || finalEvent.type === "error") {
+            await updateExecutionStep(useCase.id, executionId, step.id, {
+              status: "error",
+              output: (finalEvent?.error as string) || "Sub-agent execution failed.",
+            });
+            continue;
+          }
+
           await updateExecutionStep(useCase.id, executionId, step.id, {
             status: "done",
-            output: stepData.output,
-            provider: stepData.provider,
-            inputTokens: stepData.inputTokens,
-            outputTokens: stepData.outputTokens,
-            costUsd: stepData.costUsd,
-            durationMs: stepData.durationMs,
+            output: finalEvent.output as string,
+            provider: finalEvent.provider as string,
+            inputTokens: finalEvent.inputTokens as number,
+            outputTokens: finalEvent.outputTokens as number,
+            costUsd: finalEvent.costUsd as number,
+            durationMs: finalEvent.durationMs as number,
           });
         } catch (err) {
           await updateExecutionStep(useCase.id, executionId, step.id, {
@@ -322,7 +400,8 @@ export default function ExecutionPage() {
       <div className="mt-6 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6 text-center">
         <p className="text-sm text-[var(--muted)]">
           Running this makes real LLM calls (one master-agent planning call,
-          then one call per sub-agent step) and spends real tokens.
+          then one call per sub-agent step), streamed live as they&apos;re
+          generated, and spends real tokens.
         </p>
         {planError && <p className="mt-3 text-sm text-[var(--tier-critical)]">{planError}</p>}
         <button
@@ -336,6 +415,24 @@ export default function ExecutionPage() {
               : "Running..."
             : `Run execution${executions.length > 0 ? ` (run #${executions.length + 1})` : ""}`}
         </button>
+
+        {planning && (planningSummary || planningSteps.length > 0) && (
+          <div className="mt-6 space-y-2 text-left">
+            {planningSummary && (
+              <p className="text-sm text-[var(--foreground)]">{planningSummary}</p>
+            )}
+            {planningSteps.map((step, i) => (
+              <div
+                key={`${step.name}-${i}`}
+                className="rounded-lg border border-[var(--border)] bg-[var(--background)] px-4 py-2 text-sm"
+              >
+                <span className="font-semibold">{step.name}</span>
+                <span className="text-[var(--muted)]"> &middot; {step.tool} &middot; {step.task}</span>
+              </div>
+            ))}
+            <span className="status-blink inline-block text-xs text-[var(--muted)]">deciding next step&hellip;</span>
+          </div>
+        )}
       </div>
 
       {executions.length > 0 && (
@@ -345,7 +442,12 @@ export default function ExecutionPage() {
           </h2>
           <div className="space-y-6">
             {[...executions].reverse().map((run) => (
-              <ExecutionCard key={run.id} run={run} isLive={run.id === currentExecutionId && running} />
+              <ExecutionCard
+                key={run.id}
+                run={run}
+                isLive={run.id === currentExecutionId && running}
+                liveOutput={liveOutput}
+              />
             ))}
           </div>
         </div>

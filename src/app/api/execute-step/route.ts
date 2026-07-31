@@ -1,4 +1,8 @@
-import { callWithFallback, resolveProviderChain } from "@/lib/llmProviders";
+import { StateGraph, MessagesAnnotation, START, END } from "@langchain/langgraph";
+import { ToolNode, toolsCondition } from "@langchain/langgraph/prebuilt";
+import { HumanMessage, SystemMessage, AIMessageChunk } from "@langchain/core/messages";
+import { buildAgentModel, resolveAgentProvider } from "@/lib/agentModel";
+import { knowledgeBaseSearch } from "@/lib/knowledgeBase";
 import { estimateCostUsd } from "@/lib/pricing";
 import { clientIp } from "@/lib/rateLimit";
 import { executionLimiter } from "@/lib/executionLimiter";
@@ -17,7 +21,29 @@ function buildSystemPrompt(step: ExecuteStepRequestBody["step"]): string {
 within a larger multi-agent execution. Carry out your assigned task and report
 back to the master agent in 2-4 concise sentences: what you did and what you
 found or produced. Be specific and concrete for this use case, not generic.
-Plain text only - no JSON, no markdown, no preamble like "As the sub-agent...".`;
+You have a knowledge_base_search tool available - use it if this task would
+genuinely benefit from citing real policy or reference material, otherwise
+just answer directly. Plain text only - no JSON, no markdown, no preamble
+like "As the sub-agent...".`;
+}
+
+const TOOLS = [knowledgeBaseSearch];
+
+function buildGraph(provider: ReturnType<typeof resolveAgentProvider>) {
+  const model = buildAgentModel(provider).bindTools(TOOLS);
+
+  async function callModel(state: typeof MessagesAnnotation.State) {
+    const response = await model.invoke(state.messages);
+    return { messages: [response] };
+  }
+
+  return new StateGraph(MessagesAnnotation)
+    .addNode("agent", callModel)
+    .addNode("tools", new ToolNode(TOOLS))
+    .addEdge(START, "agent")
+    .addConditionalEdges("agent", toolsCondition, ["tools", END])
+    .addEdge("tools", "agent")
+    .compile();
 }
 
 export async function POST(request: Request) {
@@ -27,11 +53,11 @@ export async function POST(request: Request) {
     return Response.json({ error: gate.reason }, { status: 429 });
   }
 
-  if (resolveProviderChain().length === 0) {
-    return Response.json(
-      { error: "No LLM provider is configured on the server." },
-      { status: 500 }
-    );
+  let provider: ReturnType<typeof resolveAgentProvider>;
+  try {
+    provider = resolveAgentProvider();
+  } catch (err) {
+    return Response.json({ error: (err as Error).message }, { status: 500 });
   }
 
   let body: ExecuteStepRequestBody;
@@ -51,28 +77,68 @@ Master agent's plan: ${body.masterAgentSummary}
 
 Your task: ${body.step.task}`;
 
+  const graph = buildGraph(provider);
   const start = Date.now();
-  try {
-    const { provider, text, inputTokens, outputTokens } = await callWithFallback(
-      buildSystemPrompt(body.step),
-      userMessage,
-      250
-    );
+  const encoder = new TextEncoder();
 
-    executionLimiter.record(ip);
+  const stream = new ReadableStream({
+    async start(controller) {
+      function send(data: object) {
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+      }
 
-    return Response.json({
-      output: text.trim(),
-      provider,
-      inputTokens,
-      outputTokens,
-      costUsd: estimateCostUsd(provider, inputTokens, outputTokens),
-      durationMs: Date.now() - start,
-    });
-  } catch (err) {
-    return Response.json(
-      { error: `Sub-agent execution error: ${(err as Error).message}` },
-      { status: 502 }
-    );
-  }
+      let output = "";
+      let inputTokens = 0;
+      let outputTokens = 0;
+
+      try {
+        const events = await graph.stream(
+          {
+            messages: [new SystemMessage(buildSystemPrompt(body.step)), new HumanMessage(userMessage)],
+          },
+          { streamMode: "messages" }
+        );
+
+        for await (const event of events) {
+          const [chunk, metadata] = event as [AIMessageChunk, { langgraph_node?: string }];
+          if (metadata?.langgraph_node !== "agent") continue;
+          if (chunk.tool_call_chunks && chunk.tool_call_chunks.length > 0) continue;
+
+          const text = typeof chunk.content === "string" ? chunk.content : "";
+          if (text) {
+            output += text;
+            send({ type: "token", text });
+          }
+          if (chunk.usage_metadata) {
+            inputTokens = chunk.usage_metadata.input_tokens ?? inputTokens;
+            outputTokens = chunk.usage_metadata.output_tokens ?? outputTokens;
+          }
+        }
+
+        executionLimiter.record(ip);
+
+        send({
+          type: "done",
+          output: output.trim(),
+          provider,
+          inputTokens,
+          outputTokens,
+          costUsd: estimateCostUsd(provider, inputTokens, outputTokens),
+          durationMs: Date.now() - start,
+        });
+      } catch (err) {
+        send({ type: "error", error: `Sub-agent execution error: ${(err as Error).message}` });
+      } finally {
+        controller.close();
+      }
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      "content-type": "text/event-stream",
+      "cache-control": "no-cache, no-transform",
+      connection: "keep-alive",
+    },
+  });
 }
