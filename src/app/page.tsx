@@ -55,8 +55,9 @@ export default function LandingPage() {
               for a walkthrough of the whole pipeline.
             </p>
             <p className="mt-2 text-xs text-white/60">
-              No login required. Nothing sensitive is stored server-side &mdash;
-              state lives in your browser session.
+              Sign in required to submit or view use cases &mdash; every use
+              case is a real, persisted record shared across your
+              organization&apos;s reviewers, not just your browser session.
             </p>
           </div>
 

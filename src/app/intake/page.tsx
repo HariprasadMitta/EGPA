@@ -73,7 +73,7 @@ export default function IntakePage() {
     setSubmitting(true);
     setError(null);
 
-    const useCase = createUseCase({
+    const useCase = await createUseCase({
       title,
       description,
       businessDomain: businessDomain || "Unspecified",

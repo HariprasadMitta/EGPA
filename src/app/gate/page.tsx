@@ -53,7 +53,7 @@ export default function GatePage() {
 
   function handleArbApprove() {
     if (!user) return;
-    approveArb(useCase.id, user.name);
+    approveArb(useCase.id);
   }
 
   return (

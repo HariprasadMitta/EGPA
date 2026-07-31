@@ -244,10 +244,10 @@ export default function ExecutionPage() {
         })
       );
 
-      startExecution(useCase.id, executionId, runNumber, planData.masterAgentSummary, steps);
+      await startExecution(useCase.id, executionId, runNumber, planData.masterAgentSummary, steps);
 
       for (const step of steps) {
-        updateExecutionStep(useCase.id, executionId, step.id, { status: "running" });
+        await updateExecutionStep(useCase.id, executionId, step.id, { status: "running" });
         try {
           const stepRes = await fetch("/api/execute-step", {
             method: "POST",
@@ -261,13 +261,13 @@ export default function ExecutionPage() {
           });
           const stepData = await stepRes.json();
           if (!stepRes.ok) {
-            updateExecutionStep(useCase.id, executionId, step.id, {
+            await updateExecutionStep(useCase.id, executionId, step.id, {
               status: "error",
               output: stepData.error || "Sub-agent execution failed.",
             });
             continue;
           }
-          updateExecutionStep(useCase.id, executionId, step.id, {
+          await updateExecutionStep(useCase.id, executionId, step.id, {
             status: "done",
             output: stepData.output,
             provider: stepData.provider,
@@ -277,14 +277,14 @@ export default function ExecutionPage() {
             durationMs: stepData.durationMs,
           });
         } catch (err) {
-          updateExecutionStep(useCase.id, executionId, step.id, {
+          await updateExecutionStep(useCase.id, executionId, step.id, {
             status: "error",
             output: (err as Error).message,
           });
         }
       }
     } catch (err) {
-      failExecution(useCase.id, executionId, (err as Error).message);
+      await failExecution(useCase.id, executionId, (err as Error).message);
     } finally {
       setRunning(false);
       setPlanning(false);

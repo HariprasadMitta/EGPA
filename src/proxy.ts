@@ -3,9 +3,21 @@ import { auth } from "@/auth";
 
 // Next.js 16 renamed middleware.ts -> proxy.ts and the exported function
 // must be named "proxy" (see node_modules/next/dist/docs/.../version-16.md).
-// Scope matches exactly what already hard-required sign-in client-side
-// before this phase (/execution, /mlops) - not a new/wider policy.
-const PROTECTED_PREFIXES = ["/execution", "/mlops"];
+//
+// Phase 3 (real database): the whole use-case workflow now requires
+// sign-in, not just /execution and /mlops - once data is real and shared
+// (not per-browser sessionStorage), anonymous create/view access is a real
+// gap, not a demo nicety. /guide and /registry stay public (static
+// reference content, not use-case data).
+const PROTECTED_PREFIXES = [
+  "/execution",
+  "/mlops",
+  "/intake",
+  "/recommendation",
+  "/gate",
+  "/adr",
+  "/portfolio",
+];
 
 export const proxy = auth((req) => {
   const isProtected = PROTECTED_PREFIXES.some((p) => req.nextUrl.pathname.startsWith(p));
@@ -15,5 +27,13 @@ export const proxy = auth((req) => {
 });
 
 export const config = {
-  matcher: ["/execution/:path*", "/mlops/:path*"],
+  matcher: [
+    "/execution/:path*",
+    "/mlops/:path*",
+    "/intake/:path*",
+    "/recommendation/:path*",
+    "/gate/:path*",
+    "/adr/:path*",
+    "/portfolio/:path*",
+  ],
 };
