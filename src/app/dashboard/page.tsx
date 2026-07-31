@@ -1,13 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { canAccessDeveloperTools } from "@/lib/roles";
 import { useStore } from "@/lib/store";
 import { useMlOps } from "@/lib/mlops";
 import { RiskBadge } from "@/components/RiskBadge";
-import { contextUsage, costValueGauge, driftIndicator, generateTelemetry } from "@/lib/telemetry";
-import { PingResult, RiskTier, TelemetryEvent } from "@/types";
+import { ExecutionRun, PingResult, SubAgentStep } from "@/types";
 
 function ConnectionStatusRow({
   label,
@@ -44,63 +42,29 @@ function ConnectionStatusRow({
   );
 }
 
-function TelemetryFeed({ useCaseId, riskTier }: { useCaseId: string; riskTier: RiskTier }) {
-  const [events, setEvents] = useState<TelemetryEvent[]>(() =>
-    generateTelemetry(useCaseId, riskTier)
-  );
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setEvents((prev) => {
-        const next = generateTelemetry(useCaseId + prev.length, riskTier, 1);
-        return [...prev.slice(-19), ...next];
-      });
-    }, 4000);
-    return () => clearInterval(interval);
-  }, [useCaseId, riskTier]);
-
-  return (
-    <div className="mt-4 max-h-96 space-y-3 overflow-y-auto">
-      {[...events].reverse().map((event, i) => (
-        <div
-          key={`${event.timestamp}-${i}`}
-          className="flex flex-col gap-1 rounded-md border border-[var(--border)] bg-[var(--background)] px-4 py-3 text-sm"
-        >
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <span className="font-semibold">{event.agentStep}</span>
-            <span className="text-xs text-[var(--muted)]">
-              loop {event.loopIteration} &middot; {event.durationMs}ms &middot;{" "}
-              {event.contextTokensUsed.toLocaleString("en-US")} tok
-            </span>
-          </div>
-          <p className="text-[var(--muted)]">{event.decisionReason}</p>
-          <p className="text-xs text-[var(--muted)]" suppressHydrationWarning>
-            {new Date(event.timestamp).toLocaleTimeString("en-US")}
-          </p>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 export default function DashboardPage() {
   const { user } = useAuth();
   const { bundles, active } = useStore();
   const mlops = useMlOps();
   const selected = active ?? bundles[0] ?? null;
 
-  const drift = useMemo(() => (selected ? driftIndicator(selected.useCase.id) : 0), [selected]);
-  const cost = useMemo(
-    () => (selected ? costValueGauge(selected.useCase.id) : { costUsd: 0, valueScore: 0 }),
-    [selected]
-  );
-  const ctx = useMemo(
-    () => (selected ? contextUsage(selected.useCase.id) : { usedTokens: 0, budgetTokens: 1 }),
-    [selected]
-  );
+  const allSteps: { run: ExecutionRun; step: SubAgentStep }[] = selected
+    ? selected.executions.flatMap((run) =>
+        run.steps
+          .filter((s) => s.status === "done" || s.status === "error")
+          .map((step) => ({ run, step }))
+      )
+    : [];
 
-  const driftLevel = drift > 12 ? "high" : drift > 6 ? "medium" : "low";
-  const ctxPct = Math.round((ctx.usedTokens / ctx.budgetTokens) * 100);
+  const doneSteps = allSteps.filter(({ step }) => step.status === "done");
+  const avgDurationMs = doneSteps.length
+    ? Math.round(doneSteps.reduce((sum, { step }) => sum + step.durationMs, 0) / doneSteps.length)
+    : 0;
+  const providerCounts = doneSteps.reduce<Record<string, number>>((acc, { step }) => {
+    const p = step.provider ?? "unknown";
+    acc[p] = (acc[p] ?? 0) + 1;
+    return acc;
+  }, {});
 
   return (
     <div className="mx-auto max-w-5xl px-6 py-12">
@@ -110,13 +74,10 @@ export default function DashboardPage() {
             Runtime Observability Dashboard
           </h1>
           <p className="mt-1 text-sm text-[var(--muted)]">
-            Telemetry reported up from the AI Gateway &mdash; this Control
-            Plane view observes it but does not sit in the traffic path.
+            Real usage and step-level history, measured directly from executions run in this app
+            - nothing on this page is simulated.
           </p>
         </div>
-        <span className="whitespace-nowrap rounded-full border border-[var(--accent)]/30 bg-[var(--surface)] px-3 py-1 text-xs font-semibold text-[var(--accent)]">
-          Simulated telemetry &mdash; connects live via SDK/webhook once agents are wired up
-        </span>
       </div>
 
       {user && canAccessDeveloperTools(user.role) && (
@@ -158,109 +119,100 @@ export default function DashboardPage() {
             <RiskBadge tier={selected.useCase.riskTier} />
           </div>
 
-          {selected.executions.length > 0 && (() => {
-            const latest = selected.executions[selected.executions.length - 1];
-            const lifetimeTokens = selected.executions.reduce(
-              (sum, e) => sum + e.totalInputTokens + e.totalOutputTokens,
-              0
-            );
-            const lifetimeCost = selected.executions.reduce((sum, e) => sum + e.totalCostUsd, 0);
-            return (
-              <div className="mt-6 rounded-xl border border-[var(--accent)]/30 bg-[var(--surface)] p-5">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--accent)]">
-                    Real execution usage &mdash; measured, not simulated
-                  </h3>
-                  <span className="text-xs text-[var(--muted)]">
-                    {selected.executions.length} execution{selected.executions.length === 1 ? "" : "s"} &middot;
-                    latest: <span className="font-mono">{latest.id}</span> (run #{latest.runNumber},{" "}
-                    <span className="capitalize">{latest.status}</span>)
-                  </span>
-                </div>
-                <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
-                  <div>
-                    <p className="text-xs text-[var(--muted)]">Latest run tokens</p>
-                    <p className="text-lg font-bold">
-                      {(latest.totalInputTokens + latest.totalOutputTokens).toLocaleString("en-US")}
-                    </p>
+          {selected.executions.length === 0 ? (
+            <p className="mt-6 text-sm text-[var(--muted)]">
+              No executions run yet for this use case &mdash; run one from the Execute page to
+              populate real usage and step history here.
+            </p>
+          ) : (
+            (() => {
+              const latest = selected.executions[selected.executions.length - 1];
+              const lifetimeTokens = selected.executions.reduce(
+                (sum, e) => sum + e.totalInputTokens + e.totalOutputTokens,
+                0
+              );
+              const lifetimeCost = selected.executions.reduce((sum, e) => sum + e.totalCostUsd, 0);
+              return (
+                <>
+                  <div className="mt-6 rounded-xl border border-[var(--accent)]/30 bg-[var(--surface)] p-5">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--accent)]">
+                        Real execution usage
+                      </h3>
+                      <span className="text-xs text-[var(--muted)]">
+                        {selected.executions.length} execution{selected.executions.length === 1 ? "" : "s"} &middot;
+                        latest: <span className="font-mono">{latest.id}</span> (run #{latest.runNumber},{" "}
+                        <span className="capitalize">{latest.status}</span>)
+                      </span>
+                    </div>
+                    <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
+                      <div>
+                        <p className="text-xs text-[var(--muted)]">Latest run tokens</p>
+                        <p className="text-lg font-bold">
+                          {(latest.totalInputTokens + latest.totalOutputTokens).toLocaleString("en-US")}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-[var(--muted)]">Latest run cost</p>
+                        <p className="text-lg font-bold">${latest.totalCostUsd.toFixed(4)}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-[var(--muted)]">Lifetime tokens / cost</p>
+                        <p className="text-lg font-bold">
+                          {lifetimeTokens.toLocaleString("en-US")} / ${lifetimeCost.toFixed(4)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-[var(--muted)]">Avg sub-agent step duration</p>
+                        <p className="text-lg font-bold">
+                          {avgDurationMs > 0 ? `${(avgDurationMs / 1000).toFixed(1)}s` : "-"}
+                        </p>
+                      </div>
+                    </div>
+                    {Object.keys(providerCounts).length > 0 && (
+                      <p className="mt-3 text-xs text-[var(--muted)]">
+                        Provider mix:{" "}
+                        {Object.entries(providerCounts)
+                          .map(([p, c]) => `${p} (${c})`)
+                          .join(", ")}
+                      </p>
+                    )}
                   </div>
-                  <div>
-                    <p className="text-xs text-[var(--muted)]">Latest run cost</p>
-                    <p className="text-lg font-bold">${latest.totalCostUsd.toFixed(4)}</p>
+
+                  <div className="mt-6 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6">
+                    <h2 className="text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">
+                      Decision trace &mdash; real step history, every execution
+                    </h2>
+                    <div className="mt-4 max-h-96 space-y-3 overflow-y-auto">
+                      {[...allSteps].reverse().map(({ run, step }) => (
+                        <div
+                          key={`${run.id}-${step.id}`}
+                          className="rounded-md border border-[var(--border)] bg-[var(--background)] px-4 py-3 text-sm"
+                        >
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <span className="font-semibold">{step.name}</span>
+                            <span
+                              className={`text-xs ${step.status === "error" ? "text-[var(--tier-critical)]" : "text-[var(--muted)]"}`}
+                            >
+                              run #{run.runNumber} &middot; {step.durationMs}ms &middot;{" "}
+                              {(step.inputTokens + step.outputTokens).toLocaleString("en-US")} tok
+                            </span>
+                          </div>
+                          <p className="text-[var(--muted)]">
+                            {step.tool} &middot; {step.task}
+                          </p>
+                          {step.output && <p className="mt-1">{step.output}</p>}
+                          <p className="mt-2 text-xs text-[var(--muted)]">
+                            {step.provider ?? "-"} &middot; ${step.costUsd.toFixed(4)}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-xs text-[var(--muted)]">Sub-agents (latest)</p>
-                    <p className="text-lg font-bold">{latest.steps.length}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-[var(--muted)]">Lifetime tokens / cost</p>
-                    <p className="text-lg font-bold">
-                      {lifetimeTokens.toLocaleString("en-US")} / ${lifetimeCost.toFixed(4)}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            );
-          })()}
-
-          <div className="mt-6 grid gap-5 sm:grid-cols-3">
-            <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5">
-              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
-                Context usage vs. budget
-              </p>
-              <p className="mt-2 text-2xl font-bold">{ctxPct}%</p>
-              <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-[var(--background)]">
-                <div
-                  className="h-full rounded-full bg-[var(--accent)]"
-                  style={{ width: `${Math.min(ctxPct, 100)}%` }}
-                />
-              </div>
-              <p className="mt-2 text-xs text-[var(--muted)]">
-                {ctx.usedTokens.toLocaleString("en-US")} / {ctx.budgetTokens.toLocaleString("en-US")} tokens
-              </p>
-            </div>
-
-            <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5">
-              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
-                Drift indicator
-              </p>
-              <p
-                className={`mt-2 text-2xl font-bold ${
-                  driftLevel === "high"
-                    ? "text-[var(--tier-critical)]"
-                    : driftLevel === "medium"
-                      ? "text-[var(--tier-medium)]"
-                      : "text-[var(--tier-low)]"
-                }`}
-              >
-                {drift}%
-              </p>
-              <p className="mt-2 text-xs text-[var(--muted)]">
-                Deviation from baseline decision distribution ({driftLevel} drift)
-              </p>
-            </div>
-
-            <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5">
-              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
-                Cost vs. value
-              </p>
-              <p className="mt-2 text-2xl font-bold">${cost.costUsd.toFixed(2)}</p>
-              <p className="mt-2 text-xs text-[var(--muted)]">
-                Value score: {cost.valueScore}/100 this session
-              </p>
-            </div>
-          </div>
-
-          <div className="mt-6 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">
-              Decision trace / explainability log
-            </h2>
-            <TelemetryFeed
-              key={selected.useCase.id}
-              useCaseId={selected.useCase.id}
-              riskTier={selected.useCase.riskTier}
-            />
-          </div>
+                </>
+              );
+            })()
+          )}
         </>
       )}
     </div>

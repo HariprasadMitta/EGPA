@@ -64,7 +64,7 @@ const ROADMAP: RoadmapStep[] = [
     n: 6,
     title: "Observability",
     description:
-      "Real token/cost/duration usage from every execution, plus simulated Gateway telemetry (drift, cost-vs-value), all in one dashboard.",
+      "Real token/cost/duration usage and a real step-by-step decision trace from every execution, all in one dashboard - nothing simulated.",
     role: "All roles",
     href: "/dashboard",
   },

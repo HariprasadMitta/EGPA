@@ -111,16 +111,6 @@ export interface ModelRegistryEntry {
   allowedRiskTiers: RiskTier[];
 }
 
-export interface TelemetryEvent {
-  useCaseId: string;
-  timestamp: string;
-  agentStep: string;
-  decisionReason: string;
-  durationMs: number;
-  contextTokensUsed: number;
-  loopIteration: number;
-}
-
 export interface UseCaseBundle {
   useCase: UseCase;
   recommendation: Recommendation | null;
