@@ -1,80 +1,87 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ROLE_DESCRIPTIONS, ROLE_LABELS, useAuth } from "@/lib/auth";
-import { UserRole } from "@/types";
-
-const ROLES: UserRole[] = ["requester", "steward", "governance-owner", "developer", "arb", "admin"];
+import { getSession, signIn } from "next-auth/react";
 
 export default function LoginPage() {
   const router = useRouter();
-  const { login } = useAuth();
-  const [name, setName] = useState("");
-  const [role, setRole] = useState<UserRole | null>(null);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
-  function handleSignIn() {
-    if (!name.trim()) {
-      setError("Enter a name to continue.");
+  async function handleSignIn() {
+    setError(null);
+    if (!email.trim() || !password) {
+      setError("Enter both email and password.");
       return;
     }
-    if (!role) {
-      setError("Choose a role to continue.");
-      return;
+
+    setSubmitting(true);
+    try {
+      const result = await signIn("credentials", {
+        email: email.trim(),
+        password,
+        redirect: false,
+      });
+
+      if (!result || result.error) {
+        setError("Incorrect email or password.");
+        return;
+      }
+
+      const session = await getSession();
+      const role = session?.user?.role;
+      router.push(role === "developer" || role === "arb" || role === "admin" ? "/portfolio" : "/intake");
+    } finally {
+      setSubmitting(false);
     }
-    login({ name: name.trim(), role });
-    router.push(role === "developer" || role === "arb" || role === "admin" ? "/portfolio" : "/intake");
   }
 
   return (
     <div className="mx-auto max-w-2xl px-6 py-14">
       <h1 className="text-2xl font-bold text-[var(--brand-strong)]">Sign in to Momentum AI CV</h1>
       <p className="mt-2 text-sm text-[var(--muted)]">
-        Simulated single sign-on for this demo &mdash; pick a name and a role.
-        No password, no real account is created; this only sets your session
-        in this browser tab.
+        Real sign-in - your account and role are looked up from the database.
       </p>
 
       <div className="mt-6 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6">
-        <label className="block text-sm font-medium">Name</label>
+        <label className="block text-sm font-medium">Email</label>
         <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="e.g. Priya Nandakumar"
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="you@example.com"
           className="mt-1 w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm"
         />
 
-        <p className="mt-6 mb-2 text-sm font-medium">Role</p>
-        <div className="grid gap-3 sm:grid-cols-2">
-          {ROLES.map((r) => (
-            <button
-              key={r}
-              onClick={() => setRole(r)}
-              className={`rounded-md border px-4 py-3 text-left text-sm transition-colors ${
-                role === r
-                  ? "border-[var(--accent)] bg-[var(--tier-low-bg)]"
-                  : "border-[var(--border)] bg-[var(--background)] hover:bg-[var(--surface)]"
-              }`}
-            >
-              <span className="block font-semibold">{ROLE_LABELS[r]}</span>
-              <span className="mt-1 block text-xs text-[var(--muted)]">
-                {ROLE_DESCRIPTIONS[r]}
-              </span>
-            </button>
-          ))}
-        </div>
+        <label className="mt-4 block text-sm font-medium">Password</label>
+        <input
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder="********"
+          className="mt-1 w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm"
+        />
 
-        {error && (
-          <p className="mt-4 text-sm text-[var(--tier-critical)]">{error}</p>
-        )}
+        {error && <p className="mt-4 text-sm text-[var(--tier-critical)]">{error}</p>}
 
         <button
           onClick={handleSignIn}
-          className="mt-6 w-full rounded-full bg-[var(--brand)] px-6 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[var(--brand-strong)]"
+          disabled={submitting}
+          className="mt-6 w-full rounded-full bg-[var(--brand)] px-6 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[var(--brand-strong)] disabled:cursor-not-allowed disabled:opacity-60"
         >
-          Sign in
+          {submitting ? "Signing in..." : "Sign in"}
         </button>
+
+        <p className="mt-4 text-center text-sm text-[var(--muted)]">
+          Don&apos;t have an account?{" "}
+          <Link href="/signup" className="font-medium text-[var(--brand)] hover:underline">
+            Sign up
+          </Link>
+        </p>
       </div>
     </div>
   );
