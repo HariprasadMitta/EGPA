@@ -296,11 +296,20 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       setBundlesMap((prev) => {
         const existing = prev[useCaseId];
         if (!existing) return prev;
+        const execution = data.execution as ExecutionRun;
+        // Guard against the SSE broadcast for this same creation (Phase 5)
+        // already having landed in state first - appending unconditionally
+        // would leave two entries sharing one id (a real bug: caused a
+        // React duplicate-key warning and could make an execution appear
+        // to vanish from the list).
+        const executions = existing.executions.some((e) => e.id === execution.id)
+          ? existing.executions.map((e) => (e.id === execution.id ? execution : e))
+          : [...existing.executions, execution];
         return {
           ...prev,
           [useCaseId]: {
             ...existing,
-            executions: [...existing.executions, data.execution as ExecutionRun],
+            executions,
             useCase: { ...existing.useCase, status: "executing" },
           },
         };

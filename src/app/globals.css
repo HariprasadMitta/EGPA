@@ -88,3 +88,35 @@ body {
 .status-blink {
   animation: status-blink 1.4s ease-in-out infinite;
 }
+
+@keyframes fade-slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fade-slide-up {
+  animation: fade-slide-up 0.35s ease-out both;
+}
+
+/* CSS-only accordion (grid-template-rows 0fr/1fr) - animates open/closed
+   without measuring pixel heights in JS. */
+.disclosure-body {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.25s ease;
+}
+
+.disclosure-body.open {
+  grid-template-rows: 1fr;
+}
+
+.disclosure-body > div {
+  overflow: hidden;
+  min-height: 0;
+}
