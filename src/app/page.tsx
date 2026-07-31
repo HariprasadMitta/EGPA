@@ -1,65 +1,170 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useStore } from "@/lib/store";
+import { RiskBadge } from "@/components/RiskBadge";
+import { SAMPLE_BUNDLES } from "@/lib/seed";
+
+export default function LandingPage() {
+  const router = useRouter();
+  const { loadSample } = useStore();
+
+  function openSample(id: string) {
+    loadSample(id);
+    router.push("/recommendation");
+  }
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+    <div>
+      <section className="bg-gradient-to-br from-[var(--brand)] to-[var(--brand-strong)] text-white">
+        <div className="mx-auto grid max-w-6xl gap-10 px-6 py-16 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
+          <div>
+            <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-[#7fe0d8]">
+              Enterprise AI Governance &amp; Framework Advisor
+            </p>
+            <h1 className="text-4xl font-bold leading-tight text-white sm:text-5xl">
+              Submit a use case. Get a governed, explainable AI architecture
+              recommendation in minutes.
+            </h1>
+            <p className="mt-5 text-lg text-white/80">
+              Enforced, not optional. Momentum computes a risk tier from your use
+              case, recommends a concrete agent framework and tool stack, and
+              blocks progress until the required governance controls for that
+              tier are satisfied &mdash; with a full decision record every time.
+            </p>
+            <div className="mt-8 flex flex-wrap items-center gap-4">
+              <Link
+                href="/intake"
+                className="rounded-full bg-[var(--brand-red)] px-6 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:opacity-90"
+              >
+                Try it: submit a use case
+              </Link>
+              <a
+                href="#samples"
+                className="rounded-full border border-white/30 bg-white/10 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-white/20"
+              >
+                See a sample recommendation
+              </a>
+            </div>
+            <p className="mt-4 text-xs text-white/60">
+              New here?{" "}
+              <Link href="/guide" className="font-semibold text-white underline underline-offset-2">
+                Start with the Guide
+              </Link>{" "}
+              for a walkthrough of the whole pipeline.
+            </p>
+            <p className="mt-2 text-xs text-white/60">
+              No login required. Nothing sensitive is stored server-side &mdash;
+              state lives in your browser session.
+            </p>
+          </div>
+
+          <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6 shadow-lg">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">
+              What you get for every use case
+            </h2>
+            <ul className="mt-4 space-y-4 text-sm text-[var(--foreground)]">
+              <li className="flex gap-3">
+                <span className="mt-0.5 h-5 w-5 flex-none rounded-full bg-[var(--tier-low-bg)] text-center text-xs font-bold text-[var(--tier-low)]">
+                  1
+                </span>
+                <span>
+                  <strong>Recommended framework &amp; tool stack</strong> &mdash;
+                  framework-agnostic, drawn from a structured catalog.
+                </span>
+              </li>
+              <li className="flex gap-3">
+                <span className="mt-0.5 h-5 w-5 flex-none rounded-full bg-[var(--tier-medium-bg)] text-center text-xs font-bold text-[var(--tier-medium)]">
+                  2
+                </span>
+                <span>
+                  <strong>Harness, loop, and context strategy</strong> &mdash;
+                  with an iteration ceiling matched to risk.
+                </span>
+              </li>
+              <li className="flex gap-3">
+                <span className="mt-0.5 h-5 w-5 flex-none rounded-full bg-[var(--tier-high-bg)] text-center text-xs font-bold text-[var(--tier-high)]">
+                  3
+                </span>
+                <span>
+                  <strong>A computed governance verdict</strong> &mdash; risk
+                  tier, required controls, and HITL level you must satisfy, not
+                  opt into.
+                </span>
+              </li>
+              <li className="flex gap-3">
+                <span className="mt-0.5 h-5 w-5 flex-none rounded-full bg-[var(--tier-critical-bg)] text-center text-xs font-bold text-[var(--tier-critical)]">
+                  4
+                </span>
+                <span>
+                  <strong>An auto-generated, versioned ADR</strong> &mdash;
+                  downloadable, traceable to every decision above.
+                </span>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <div className="mx-auto max-w-6xl px-6 py-14">
+        <section id="samples" className="scroll-mt-20">
+          <h2 className="text-2xl font-bold text-[var(--brand-strong)]">
+            Try a pre-loaded example
+          </h2>
+          <p className="mt-2 max-w-2xl text-[var(--muted)]">
+            Open one of these to see a full recommendation, governance gate,
+            ADR, and observability dashboard already populated &mdash; no typing
+            required.
           </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
+          <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            {SAMPLE_BUNDLES.map((bundle) => (
+              <button
+                key={bundle.useCase.id}
+                onClick={() => openSample(bundle.useCase.id)}
+                className="flex flex-col items-start rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 text-left shadow-sm transition-transform hover:-translate-y-0.5 hover:shadow-md"
+              >
+                <RiskBadge tier={bundle.useCase.riskTier} />
+                <h3 className="mt-3 font-semibold text-[var(--foreground)]">
+                  {bundle.useCase.title}
+                </h3>
+                <p className="mt-2 text-sm text-[var(--muted)] line-clamp-3">
+                  {bundle.useCase.description}
+                </p>
+                <span className="mt-4 text-sm font-semibold text-[var(--accent)]">
+                  Open recommendation &rarr;
+                </span>
+              </button>
+            ))}
+          </div>
+        </section>
+
+        <section className="mt-20 grid gap-6 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6 sm:grid-cols-2">
+          <div>
+            <h3 className="font-semibold text-[var(--brand-strong)]">
+              Control Plane vs. AI Gateway
+            </h3>
+            <p className="mt-2 text-sm text-[var(--muted)]">
+              Momentum <strong>is</strong> the Control Plane: risk templates,
+              approval workflows, the model registry, and ADRs. It configures
+              and observes the Gateway &mdash; the data-plane layer that
+              actually routes live agent traffic &mdash; but does not sit in
+              that traffic path itself.
+            </p>
+          </div>
+          <div>
+            <h3 className="font-semibold text-[var(--brand-strong)]">
+              Framework-agnostic by design
+            </h3>
+            <p className="mt-2 text-sm text-[var(--muted)]">
+              LangGraph, AutoGen, Bedrock Agents, and a growing catalog of others
+              are just entries the advisor can recommend from &mdash; the
+              governance verdict is computed independently of which one you
+              pick.
+            </p>
+          </div>
+        </section>
+      </div>
     </div>
   );
 }

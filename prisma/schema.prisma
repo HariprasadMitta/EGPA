@@ -1,0 +1,137 @@
+// Prisma schema - mirrors src/types/index.ts exactly so the app's existing
+// TS types stay the source of truth for shape. Union-typed string fields
+// (role, riskTier, status, etc.) are plain String columns rather than
+// Postgres enums: those TS unions have already grown once this session
+// (the "admin" role) and plain strings avoid a migration every time that
+// happens again - validation for these stays at the TypeScript layer,
+// same as it already is today.
+
+// Prisma 7: no `url` here - the connection string lives in prisma.config.ts
+// (for the CLI/migrations) and is passed via a driver adapter to
+// PrismaClient at runtime (src/lib/prisma.ts). Sticking with the classic
+// "prisma-client-js" generator (not the newer "prisma-client" provider,
+// and no custom `output` path) because that's the one that generates into
+// node_modules/.prisma/client, which Turbopack resolves reliably - the
+// newer provider's ESM output outside node_modules is known to break
+// Turbopack's SSR module resolution.
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  role         String // UserRole: requester | steward | governance-owner | developer | arb | admin
+  createdAt    DateTime @default(now())
+
+  useCases UseCase[]
+}
+
+model UseCase {
+  id                 String   @id
+  title              String
+  description        String
+  businessDomain     String
+  dataSensitivity    String // DataSensitivity
+  autonomyLevel      String // AutonomyLevel
+  integrationSurface String // IntegrationSurface
+  expectedUsers      String // ExpectedUsers
+  owner              String
+  steward            String
+  riskTier           String // RiskTier
+  status             String // UseCaseStatus
+  createdAt          DateTime @default(now())
+
+  ownerUser   User   @relation(fields: [ownerUserId], references: [id])
+  ownerUserId String
+
+  recommendation Recommendation?
+  gate           GovernanceGate?
+  adrs           Adr[]
+  executions     ExecutionRun[]
+}
+
+model Recommendation {
+  useCaseId        String   @id
+  framework        String
+  tools            String[]
+  harnessPattern   String
+  loopPattern      String
+  iterationCeiling Int
+  contextStrategy  String
+  rationale        String
+  createdAt        DateTime @default(now())
+  version          Int
+
+  useCase UseCase @relation(fields: [useCaseId], references: [id])
+}
+
+model GovernanceGate {
+  useCaseId           String    @id
+  riskTier            String
+  requiredControls    String[]
+  hitlTier            String // HitlTier
+  acknowledged        Boolean   @default(false)
+  acknowledgedItems   String[]
+  requiresArbApproval Boolean   @default(false)
+  arbApproved         Boolean   @default(false)
+  arbApprovedBy       String?
+  arbApprovedAt       DateTime?
+
+  useCase UseCase @relation(fields: [useCaseId], references: [id])
+}
+
+model Adr {
+  id        String   @id @default(cuid())
+  useCaseId String
+  version   Int
+  createdAt DateTime @default(now())
+  content   String
+
+  useCase UseCase @relation(fields: [useCaseId], references: [id])
+
+  @@unique([useCaseId, version])
+}
+
+model ExecutionRun {
+  id                 String    @id
+  runNumber          Int
+  useCaseId          String
+  masterAgentSummary String
+  status             String // "planning" | "running" | "completed" | "failed"
+  startedAt          DateTime  @default(now())
+  completedAt        DateTime?
+  totalInputTokens   Int       @default(0)
+  totalOutputTokens  Int       @default(0)
+  totalCostUsd       Float     @default(0)
+  error              String?
+
+  useCase UseCase        @relation(fields: [useCaseId], references: [id])
+  steps   SubAgentStep[]
+}
+
+model SubAgentStep {
+  id           String  @id @default(cuid())
+  stepId       String // app-facing id, e.g. "step-0" - unique only within its run, not globally
+  name         String
+  tool         String
+  task         String
+  status       String // SubAgentStepStatus
+  output       String?
+  provider     String?
+  inputTokens  Int     @default(0)
+  outputTokens Int     @default(0)
+  costUsd      Float   @default(0)
+  durationMs   Int     @default(0)
+
+  executionRun   ExecutionRun @relation(fields: [executionRunId], references: [id])
+  executionRunId String
+
+  @@unique([executionRunId, stepId])
+}
