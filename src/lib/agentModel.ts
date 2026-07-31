@@ -1,45 +1,48 @@
-import { ChatAnthropic } from "@langchain/anthropic";
 import { ChatOpenAI } from "@langchain/openai";
 
-export type AgentProvider = "anthropic" | "openrouter";
-
-function hasKey(provider: AgentProvider): boolean {
-  return provider === "anthropic"
-    ? Boolean(process.env.ANTHROPIC_API_KEY)
-    : Boolean(process.env.OPENROUTER_API_KEY);
+// Real AI Gateway (LiteLLM Proxy, Phase 10, local-only for now - see
+// litellm-config.yaml). The app no longer picks a provider or holds a raw
+// provider key: it always talks to one gateway endpoint with one scoped
+// virtual key, and the gateway's own model_list/fallbacks config
+// (momentum-primary -> anthropic -> groq -> gemini) does what
+// resolveAgentProvider()'s branching used to do in app code.
+//
+// Real provider attribution: LiteLLM returns which upstream model actually
+// served the request via the `x-litellm-model-name` response header (e.g.
+// "openrouter/meta-llama/llama-3.3-70b-instruct") - confirmed empirically
+// present on both streaming and non-streaming responses, unlike the JSON
+// body's `model` field (which LiteLLM overwrites with the requested alias,
+// a known upstream behavior). LangChain's ChatOpenAI doesn't surface raw
+// response headers itself, so a custom `fetch` captures it directly - this
+// is what keeps the Dashboard's "provider mix" stat real instead of a
+// constant "momentum-primary" for every step.
+export interface AgentGatewayHandle {
+  model: ChatOpenAI;
+  getLastModelName: () => string | null;
 }
 
-/**
- * Resolves which of the two tool-calling-capable providers to use for this
- * request. Deliberately not a live try-then-fallback across a stream (a
- * failure partway through a streamed response can't be gaplessly retried
- * without either duplicating already-sent tokens or buffering server-side
- * first, which would defeat the point of streaming) - if the resolved
- * provider's stream fails mid-response, the step surfaces that as an error
- * exactly like the rest of this app's step-execution error handling.
- */
-export function resolveAgentProvider(): AgentProvider {
-  const primary: AgentProvider = process.env.LLM_PROVIDER === "openrouter" ? "openrouter" : "anthropic";
-  if (hasKey(primary)) return primary;
-  const other: AgentProvider = primary === "anthropic" ? "openrouter" : "anthropic";
-  if (hasKey(other)) return other;
-  throw new Error(
-    "No LLM provider configured for tool-calling execution. Set ANTHROPIC_API_KEY or OPENROUTER_API_KEY."
-  );
-}
-
-export function buildAgentModel(provider: AgentProvider): ChatAnthropic | ChatOpenAI {
-  if (provider === "anthropic") {
-    return new ChatAnthropic({
-      apiKey: process.env.ANTHROPIC_API_KEY,
-      model: process.env.CLAUDE_MODEL || "claude-sonnet-4-6",
-      streaming: true,
-    });
+export function buildAgentModel(): AgentGatewayHandle {
+  if (!process.env.LITELLM_BASE_URL || !process.env.LITELLM_VIRTUAL_KEY) {
+    throw new Error(
+      "AI Gateway not configured. Set LITELLM_BASE_URL and LITELLM_VIRTUAL_KEY (see litellm-config.yaml)."
+    );
   }
-  return new ChatOpenAI({
-    apiKey: process.env.OPENROUTER_API_KEY,
-    model: process.env.OPENROUTER_MODEL || "meta-llama/llama-3.3-70b-instruct",
-    configuration: { baseURL: "https://openrouter.ai/api/v1" },
+
+  let lastModelName: string | null = null;
+
+  const model = new ChatOpenAI({
+    apiKey: process.env.LITELLM_VIRTUAL_KEY,
+    model: "momentum-primary",
+    configuration: {
+      baseURL: process.env.LITELLM_BASE_URL,
+      fetch: async (url: RequestInfo | URL, init?: RequestInit) => {
+        const res = await fetch(url, init);
+        lastModelName = res.headers.get("x-litellm-model-name") ?? lastModelName;
+        return res;
+      },
+    },
     streaming: true,
   });
+
+  return { model, getLastModelName: () => lastModelName };
 }

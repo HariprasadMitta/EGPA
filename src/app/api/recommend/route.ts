@@ -1,5 +1,5 @@
 import { classifyRisk } from "@/lib/governance";
-import { callWithFallback, resolveProviderChain } from "@/lib/llmProviders";
+import { gatewayChatCompletion } from "@/lib/litellm";
 import { clientIp, createRateLimiter } from "@/lib/rateLimit";
 import { AutonomyLevel, DataSensitivity, IntegrationSurface } from "@/types";
 
@@ -101,16 +101,6 @@ export async function POST(request: Request) {
     integrationSurface: body.integrationSurface,
   });
 
-  if (resolveProviderChain().length === 0) {
-    return Response.json(
-      {
-        error:
-          "No LLM provider is configured on the server. Add at least one of ANTHROPIC_API_KEY, OPENROUTER_API_KEY, GROQ_API_KEY, GEMINI_API_KEY to .env.local (see .env.local.example) and restart the dev server.",
-      },
-      { status: 500 }
-    );
-  }
-
   const userMessage = `Use case title: ${body.title}
 Business domain: ${body.businessDomain}
 Data sensitivity: ${body.dataSensitivity}
@@ -123,7 +113,7 @@ Free-text use case description:
 ${body.description}`;
 
   try {
-    const { provider, text } = await callWithFallback(buildSystemPrompt(), userMessage, 1024);
+    const { provider, text } = await gatewayChatCompletion(buildSystemPrompt(), userMessage, 1024);
     const parsed = extractJson(text);
 
     if (!isValidRecommendation(parsed)) {

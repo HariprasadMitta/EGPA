@@ -1,7 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { verifyToken } from "@/lib/webhookAuth";
 import { isGateEligible } from "@/lib/governance";
-import { AgentProvider, resolveAgentProvider } from "@/lib/agentModel";
 import { runPlanning } from "@/lib/agentPlan";
 import { runStep } from "@/lib/agentStep";
 import { startExecutionRun, applyStepPatch } from "@/lib/executionPersistence";
@@ -71,20 +70,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ use
     return Response.json({ error: "No recommendation exists for this use case yet." }, { status: 400 });
   }
 
-  let provider: AgentProvider;
-  try {
-    provider = resolveAgentProvider();
-  } catch (err) {
-    return Response.json({ error: (err as Error).message }, { status: 500 });
-  }
-
   // Real planning, consumed fully rather than streamed - nobody's watching a
   // headless trigger, so there's no browser to forward tokens to.
   let masterAgentSummary = "";
   const rawSteps: { name: string; tool: string; task: string }[] = [];
   let planError: string | null = null;
 
-  for await (const event of runPlanning(provider, {
+  for await (const event of runPlanning({
     title: useCase.title,
     description: useCase.description,
     riskTier: useCase.riskTier,
@@ -135,7 +127,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ use
     masterAgentSummary,
     useCaseTitle: useCase.title,
     useCaseDescription: useCase.description,
-    provider,
     steps,
   }).catch(() => {
     // Best-effort: each step's own outcome is already persisted via
@@ -152,10 +143,9 @@ async function runStepsInBackground(input: {
   masterAgentSummary: string;
   useCaseTitle: string;
   useCaseDescription: string;
-  provider: AgentProvider;
   steps: StepDraft[];
 }) {
-  const { useCaseId, executionId, masterAgentSummary, useCaseTitle, useCaseDescription, provider, steps } = input;
+  const { useCaseId, executionId, masterAgentSummary, useCaseTitle, useCaseDescription, steps } = input;
 
   for (const step of steps) {
     const fresh = await prisma.useCase.findUnique({ where: { id: useCaseId }, select: { killSwitchEngaged: true } });
@@ -180,7 +170,7 @@ async function runStepsInBackground(input: {
     let errorMessage: string | null = null;
 
     try {
-      for await (const event of runStep(provider, {
+      for await (const event of runStep({
         useCaseTitle,
         useCaseDescription,
         masterAgentSummary,

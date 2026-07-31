@@ -37,6 +37,11 @@ yarn-error.log*
 # vercel
 .vercel
 
+# AI Gateway (Phase 10) - local-only Python venv for the LiteLLM proxy,
+# never committed (recreate with: python -m venv .venv-litellm && ...)
+/.venv-litellm
+litellm.log
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

@@ -1,0 +1,41 @@
+# Real AI Gateway (LiteLLM Proxy), run locally via the Python venv at
+# .venv-litellm - see AGENTS.md/plan file for context. Stateless mode
+# (no database_url): fine for proving the gateway architecture locally,
+# revisit only if this proxy itself gets deployed for real later.
+#
+# The "momentum-primary" -> fallback chain below is the real replacement
+# for src/lib/llmProviders.ts's resolveProviderChain()/callWithFallback():
+# same priority order (LLM_PROVIDER=openrouter, then anthropic, groq,
+# gemini), now enforced by the gateway instead of hand-rolled app code.
+
+model_list:
+  - model_name: momentum-primary
+    litellm_params:
+      model: openrouter/meta-llama/llama-3.3-70b-instruct
+      api_key: os.environ/OPENROUTER_API_KEY
+
+  - model_name: momentum-fallback-anthropic
+    litellm_params:
+      model: anthropic/claude-sonnet-4-6
+      api_key: os.environ/ANTHROPIC_API_KEY
+
+  - model_name: momentum-fallback-groq
+    litellm_params:
+      model: groq/llama-3.3-70b-versatile
+      api_key: os.environ/GROQ_API_KEY
+
+  - model_name: momentum-fallback-gemini
+    litellm_params:
+      model: gemini/gemini-2.5-flash-lite
+      api_key: os.environ/GEMINI_API_KEY
+
+litellm_settings:
+  fallbacks:
+    - momentum-primary:
+        - momentum-fallback-anthropic
+        - momentum-fallback-groq
+        - momentum-fallback-gemini
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+  database_url: os.environ/LITELLM_DATABASE_URL

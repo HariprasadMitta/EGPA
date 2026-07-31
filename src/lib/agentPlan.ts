@@ -1,5 +1,5 @@
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
-import { AgentProvider, buildAgentModel } from "@/lib/agentModel";
+import { buildAgentModel } from "@/lib/agentModel";
 import { estimateCostUsd } from "@/lib/pricing";
 import { MAX_STEPS } from "@/lib/executionLimiter";
 
@@ -17,7 +17,7 @@ export type PlanEvent =
   | { type: "step"; name: string; tool: string; task: string }
   | {
       type: "done";
-      provider: AgentProvider;
+      provider: string;
       inputTokens: number;
       outputTokens: number;
       costUsd: number;
@@ -48,7 +48,7 @@ illustrative only, write your own real content specific to this use case):
 // the webhook trigger route (consumes them headlessly to completion) - one
 // implementation of prompt-building/NDJSON-parsing/allowlist-filtering so
 // the two entry points can't drift or under-enforce relative to each other.
-export async function* runPlanning(provider: AgentProvider, input: PlanInput): AsyncGenerator<PlanEvent> {
+export async function* runPlanning(input: PlanInput): AsyncGenerator<PlanEvent> {
   const start = Date.now();
   const userMessage = `Use case: ${input.title}
 Risk tier: ${input.riskTier}
@@ -59,7 +59,7 @@ Available tools: ${input.tools.join(", ")}
 Description:
 ${input.description}`;
 
-  const model = buildAgentModel(provider);
+  const { model, getLastModelName } = buildAgentModel();
   const allowedTools = new Set(input.tools);
 
   let buffer = "";
@@ -111,12 +111,13 @@ ${input.description}`;
     }
     yield* flushCompleteLines(true);
 
+    const modelName = getLastModelName();
     yield {
       type: "done",
-      provider,
+      provider: modelName ?? "momentum-primary",
       inputTokens,
       outputTokens,
-      costUsd: estimateCostUsd(provider, inputTokens, outputTokens),
+      costUsd: estimateCostUsd(modelName, inputTokens, outputTokens),
       durationMs: Date.now() - start,
     };
   } catch (err) {

@@ -1,7 +1,7 @@
 import { StateGraph, MessagesAnnotation, START, END } from "@langchain/langgraph";
 import { toolsCondition } from "@langchain/langgraph/prebuilt";
 import { AIMessage, AIMessageChunk, HumanMessage, SystemMessage, ToolMessage } from "@langchain/core/messages";
-import { AgentProvider, buildAgentModel } from "@/lib/agentModel";
+import { buildAgentModel } from "@/lib/agentModel";
 import { knowledgeBaseSearch } from "@/lib/knowledgeBase";
 import { logToolCall } from "@/lib/toolCallLog";
 import { estimateCostUsd } from "@/lib/pricing";
@@ -20,7 +20,7 @@ export type StepEvent =
   | {
       type: "done";
       output: string;
-      provider: AgentProvider;
+      provider: string;
       inputTokens: number;
       outputTokens: number;
       costUsd: number;
@@ -44,8 +44,9 @@ const TOOLS = [knowledgeBaseSearch];
 // A custom tools node (rather than the prebuilt ToolNode) so every real
 // invocation is persisted to ToolCallLog - real audit logging of the
 // "Audit logging" governance control, not just a one-time acknowledgment.
-export function buildGraph(provider: AgentProvider, executionId: string, stepId: string) {
-  const model = buildAgentModel(provider).bindTools(TOOLS);
+export function buildGraph(executionId: string, stepId: string) {
+  const { model: gatewayModel, getLastModelName } = buildAgentModel();
+  const model = gatewayModel.bindTools(TOOLS);
 
   async function callModel(state: typeof MessagesAnnotation.State) {
     const response = await model.invoke(state.messages);
@@ -69,20 +70,22 @@ export function buildGraph(provider: AgentProvider, executionId: string, stepId:
     return { messages: toolMessages };
   }
 
-  return new StateGraph(MessagesAnnotation)
+  const graph = new StateGraph(MessagesAnnotation)
     .addNode("agent", callModel)
     .addNode("tools", callTools)
     .addEdge(START, "agent")
     .addConditionalEdges("agent", toolsCondition, ["tools", END])
     .addEdge("tools", "agent")
     .compile();
+
+  return { graph, getLastModelName };
 }
 
 // Shared by both /api/execute-step (streams tokens to the browser as SSE)
 // and the webhook trigger route's headless background loop (consumes the
 // same generator, just ignoring token events since nobody's watching) - one
 // implementation of the graph invocation and cost accounting.
-export async function* runStep(provider: AgentProvider, input: StepInput): AsyncGenerator<StepEvent> {
+export async function* runStep(input: StepInput): AsyncGenerator<StepEvent> {
   const start = Date.now();
   const userMessage = `Use case: ${input.useCaseTitle}
 Description: ${input.useCaseDescription}
@@ -90,7 +93,7 @@ Master agent's plan: ${input.masterAgentSummary}
 
 Your task: ${input.step.task}`;
 
-  const graph = buildGraph(provider, input.executionId, input.stepId);
+  const { graph, getLastModelName } = buildGraph(input.executionId, input.stepId);
 
   let output = "";
   let inputTokens = 0;
@@ -118,13 +121,14 @@ Your task: ${input.step.task}`;
       }
     }
 
+    const modelName = getLastModelName();
     yield {
       type: "done",
       output: output.trim(),
-      provider,
+      provider: modelName ?? "momentum-primary",
       inputTokens,
       outputTokens,
-      costUsd: estimateCostUsd(provider, inputTokens, outputTokens),
+      costUsd: estimateCostUsd(modelName, inputTokens, outputTokens),
       durationMs: Date.now() - start,
     };
   } catch (err) {

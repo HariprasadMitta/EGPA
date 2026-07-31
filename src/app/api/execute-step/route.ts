@@ -1,4 +1,3 @@
-import { resolveAgentProvider } from "@/lib/agentModel";
 import { runStep, StepInput } from "@/lib/agentStep";
 import { prisma } from "@/lib/prisma";
 import { clientIp } from "@/lib/rateLimit";
@@ -11,13 +10,6 @@ export async function POST(request: Request) {
   const gate = executionLimiter.check(ip);
   if (!gate.allowed) {
     return Response.json({ error: gate.reason }, { status: 429 });
-  }
-
-  let provider: ReturnType<typeof resolveAgentProvider>;
-  try {
-    provider = resolveAgentProvider();
-  } catch (err) {
-    return Response.json({ error: (err as Error).message }, { status: 500 });
   }
 
   let body: StepInput;
@@ -55,7 +47,7 @@ export async function POST(request: Request) {
       }
 
       try {
-        for await (const event of runStep(provider, body)) {
+        for await (const event of runStep(body)) {
           send(event);
           if (event.type === "done") executionLimiter.record(ip);
         }

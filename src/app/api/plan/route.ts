@@ -1,4 +1,3 @@
-import { resolveAgentProvider } from "@/lib/agentModel";
 import { PlanInput, runPlanning } from "@/lib/agentPlan";
 import { clientIp } from "@/lib/rateLimit";
 import { executionLimiter } from "@/lib/executionLimiter";
@@ -10,13 +9,6 @@ export async function POST(request: Request) {
   const gate = executionLimiter.check(ip);
   if (!gate.allowed) {
     return Response.json({ error: gate.reason }, { status: 429 });
-  }
-
-  let provider: ReturnType<typeof resolveAgentProvider>;
-  try {
-    provider = resolveAgentProvider();
-  } catch (err) {
-    return Response.json({ error: (err as Error).message }, { status: 500 });
   }
 
   let body: PlanInput;
@@ -38,7 +30,7 @@ export async function POST(request: Request) {
       }
 
       try {
-        for await (const event of runPlanning(provider, body)) {
+        for await (const event of runPlanning(body)) {
           send(event);
           if (event.type === "done") executionLimiter.record(ip);
         }
