@@ -6,6 +6,15 @@ import {
   RiskTier,
 } from "@/types";
 
+// Shared by both the human-driven executions route and the webhook trigger
+// route (src/lib/executionPersistence.ts) so a use case's governance gate is
+// enforced identically no matter which entry point starts a run.
+export function isGateEligible(
+  gate: { acknowledged: boolean; requiresArbApproval: boolean; arbApproved: boolean } | null | undefined
+): boolean {
+  return Boolean(gate?.acknowledged) && (!gate?.requiresArbApproval || Boolean(gate?.arbApproved));
+}
+
 const SENSITIVITY_SCORE: Record<DataSensitivity, number> = {
   public: 0,
   internal: 1,

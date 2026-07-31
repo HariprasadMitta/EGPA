@@ -76,7 +76,7 @@ function makeBundle(params: {
       }
     : null;
 
-  return { useCase, recommendation, gate, adr, executions: [] };
+  return { useCase, recommendation, gate, adr, executions: [], webhookTrigger: null };
 }
 
 export const SAMPLE_BUNDLES: UseCaseBundle[] = [

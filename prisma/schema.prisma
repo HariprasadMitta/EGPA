@@ -56,6 +56,7 @@ model UseCase {
   gate           GovernanceGate?
   adrs           Adr[]
   executions     ExecutionRun[]
+  webhookTrigger WebhookTrigger?
 }
 
 model Recommendation {
@@ -136,6 +137,23 @@ model SubAgentStep {
   executionRunId String
 
   @@unique([executionRunId, stepId])
+}
+
+// Real event trigger: lets an external caller (curl, a real cron service,
+// GitHub Actions, etc.) start an execution with no human clicking "Run
+// execution." Only the token's hash is ever stored - the plaintext token is
+// generated server-side and shown to the user exactly once, the same UX
+// real API-key systems use.
+model WebhookTrigger {
+  id              String    @id @default(cuid())
+  useCaseId       String    @unique
+  tokenHash       String
+  enabled         Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  lastTriggeredAt DateTime?
+  triggerCount    Int       @default(0)
+
+  useCase UseCase @relation(fields: [useCaseId], references: [id])
 }
 
 // Real audit trail of every tool invocation during execution - not just

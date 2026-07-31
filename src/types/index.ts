@@ -112,12 +112,19 @@ export interface ModelRegistryEntry {
   allowedRiskTiers: RiskTier[];
 }
 
+export interface WebhookTriggerInfo {
+  enabled: boolean;
+  lastTriggeredAt: string | null;
+  triggerCount: number;
+}
+
 export interface UseCaseBundle {
   useCase: UseCase;
   recommendation: Recommendation | null;
   gate: GovernanceGate | null;
   adr: ADR | null;
   executions: ExecutionRun[];
+  webhookTrigger: WebhookTriggerInfo | null;
 }
 
 export type UserRole = "requester" | "steward" | "governance-owner" | "developer" | "arb" | "admin";

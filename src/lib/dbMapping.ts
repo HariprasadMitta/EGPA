@@ -6,6 +6,7 @@ import type {
   SubAgentStep as DbSubAgentStep,
   ToolCallLog as DbToolCallLog,
   UseCase as DbUseCase,
+  WebhookTrigger as DbWebhookTrigger,
 } from "@prisma/client";
 import {
   ADR,
@@ -22,6 +23,7 @@ import {
   UseCase,
   UseCaseBundle,
   UseCaseStatus,
+  WebhookTriggerInfo,
 } from "@/types";
 
 type FullUseCase = DbUseCase & {
@@ -29,6 +31,7 @@ type FullUseCase = DbUseCase & {
   gate: DbGovernanceGate | null;
   adrs: DbAdr[];
   executions: (DbExecutionRun & { steps: DbSubAgentStep[]; toolCallLogs: DbToolCallLog[] })[];
+  webhookTrigger: DbWebhookTrigger | null;
 };
 
 export function toUseCase(row: DbUseCase): UseCase {
@@ -136,6 +139,15 @@ export function toExecutionRun(
   };
 }
 
+export function toWebhookTriggerInfo(row: DbWebhookTrigger | null): WebhookTriggerInfo | null {
+  if (!row) return null;
+  return {
+    enabled: row.enabled,
+    lastTriggeredAt: row.lastTriggeredAt ? row.lastTriggeredAt.toISOString() : null,
+    triggerCount: row.triggerCount,
+  };
+}
+
 export function toUseCaseBundle(row: FullUseCase): UseCaseBundle {
   return {
     useCase: toUseCase(row),
@@ -145,6 +157,7 @@ export function toUseCaseBundle(row: FullUseCase): UseCaseBundle {
     executions: [...row.executions]
       .sort((a, b) => a.runNumber - b.runNumber)
       .map(toExecutionRun),
+    webhookTrigger: toWebhookTriggerInfo(row.webhookTrigger),
   };
 }
 
@@ -153,4 +166,5 @@ export const USE_CASE_INCLUDE = {
   gate: true,
   adrs: true,
   executions: { include: { steps: true, toolCallLogs: true } },
+  webhookTrigger: true,
 } as const;

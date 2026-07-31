@@ -9,7 +9,7 @@ import { readSseEvents } from "@/lib/sse";
 import { RiskBadge } from "@/components/RiskBadge";
 import { PipelineTrain } from "@/components/PipelineTrain";
 import { ArchitectureDiagram } from "@/components/ArchitectureDiagram";
-import { ExecutionRun, SubAgentStep, SubAgentStepStatus } from "@/types";
+import { ExecutionRun, SubAgentStep, SubAgentStepStatus, WebhookTriggerInfo } from "@/types";
 
 const STATUS_ICON: Record<SubAgentStepStatus, string> = {
   pending: "○",
@@ -149,6 +149,100 @@ function ExecutionCard({
         <p className="mt-4 rounded-md border border-[var(--tier-critical)]/30 bg-[var(--tier-critical-bg)] px-4 py-3 text-sm text-[var(--tier-critical)]">
           {run.error}
         </p>
+      )}
+    </div>
+  );
+}
+
+function WebhookTriggerPanel({
+  useCaseId,
+  webhookTrigger,
+}: {
+  useCaseId: string;
+  webhookTrigger: WebhookTriggerInfo | null;
+}) {
+  const { generateWebhookTrigger, toggleWebhookTrigger } = useStore();
+  const [newToken, setNewToken] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleGenerate() {
+    if (webhookTrigger && !window.confirm("Regenerating invalidates any previously issued token. Continue?")) {
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const token = await generateWebhookTrigger(useCaseId);
+      setNewToken(token);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleToggle() {
+    if (!webhookTrigger) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await toggleWebhookTrigger(useCaseId, !webhookTrigger.enabled);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  const curl = `curl -X POST ${origin}/api/webhooks/executions/${useCaseId} \\\n  -H "Authorization: Bearer ${newToken ?? "<token>"}"`;
+
+  return (
+    <div className="mt-6 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6">
+      <h2 className="text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">
+        Automation trigger &mdash; real webhook, no human click required
+      </h2>
+      <p className="mt-1 text-xs text-[var(--muted)]">
+        {webhookTrigger
+          ? `${webhookTrigger.enabled ? "Enabled" : "Disabled"} · triggered ${webhookTrigger.triggerCount} time${webhookTrigger.triggerCount === 1 ? "" : "s"}${
+              webhookTrigger.lastTriggeredAt
+                ? ` · last: ${new Date(webhookTrigger.lastTriggeredAt).toLocaleString("en-US")}`
+                : ""
+            }`
+          : "No webhook trigger configured yet for this use case."}
+      </p>
+
+      {error && <p className="mt-2 text-sm text-[var(--tier-critical)]">{error}</p>}
+
+      <div className="mt-3 flex flex-wrap gap-3">
+        <button
+          onClick={handleGenerate}
+          disabled={busy}
+          className="rounded-full bg-[var(--brand)] px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-[var(--brand-strong)] disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {webhookTrigger ? "Regenerate token" : "Generate token"}
+        </button>
+        {webhookTrigger && (
+          <button
+            onClick={handleToggle}
+            disabled={busy}
+            className="rounded-full border border-[var(--border)] px-4 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {webhookTrigger.enabled ? "Disable" : "Enable"}
+          </button>
+        )}
+      </div>
+
+      {newToken && (
+        <div className="mt-4 rounded-md border border-[var(--status-pending)]/40 bg-[var(--status-pending-bg)] p-4 text-xs">
+          <p className="font-semibold text-[var(--tier-critical)]">
+            Copy this token now &mdash; it will not be shown again.
+          </p>
+          <pre className="mt-2 overflow-x-auto rounded bg-[var(--background)] p-3 font-mono">{newToken}</pre>
+          <p className="mt-3 text-[var(--muted)]">Trigger a real execution from outside the browser:</p>
+          <pre className="mt-1 overflow-x-auto whitespace-pre-wrap rounded bg-[var(--background)] p-3 font-mono">{curl}</pre>
+        </div>
       )}
     </div>
   );
@@ -412,6 +506,8 @@ export default function ExecutionPage() {
         </p>
         <ArchitectureDiagram recommendation={recommendation} steps={currentRun?.steps} masterActive={planning} />
       </div>
+
+      <WebhookTriggerPanel useCaseId={useCase.id} webhookTrigger={active.webhookTrigger} />
 
       <div className="mt-6 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6 text-center">
         <p className="text-sm text-[var(--muted)]">

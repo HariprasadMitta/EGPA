@@ -47,6 +47,8 @@ interface StoreContextValue {
     patch: Partial<SubAgentStep>
   ) => Promise<void>;
   failExecution: (useCaseId: string, executionId: string, error: string) => Promise<void>;
+  generateWebhookTrigger: (useCaseId: string) => Promise<string>;
+  toggleWebhookTrigger: (useCaseId: string, enabled: boolean) => Promise<void>;
 }
 
 const StoreContext = createContext<StoreContextValue | null>(null);
@@ -129,7 +131,14 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       const useCase: UseCase = data.useCase;
       setBundlesMap((prev) => ({
         ...prev,
-        [useCase.id]: { useCase, recommendation: null, gate: null, adr: null, executions: [] },
+        [useCase.id]: {
+          useCase,
+          recommendation: null,
+          gate: null,
+          adr: null,
+          executions: [],
+          webhookTrigger: null,
+        },
       }));
       setActiveId(useCase.id);
       return useCase;
@@ -346,6 +355,27 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
+  // Both webhook-trigger actions rely on the mutation route's own
+  // broadcastBundle call (Phase 5's live-sync SSE) to reflect the new state
+  // here - no separate bundlesMap merge needed, the EventSource handler
+  // above already merges any incoming bundle by id.
+  const generateWebhookTrigger = useCallback(async (useCaseId: string): Promise<string> => {
+    const res = await fetch(`/api/use-cases/${useCaseId}/webhook-trigger`, { method: "POST" });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Failed to generate webhook trigger.");
+    return data.token as string;
+  }, []);
+
+  const toggleWebhookTrigger = useCallback(async (useCaseId: string, enabled: boolean) => {
+    const res = await fetch(`/api/use-cases/${useCaseId}/webhook-trigger`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ enabled }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Failed to update webhook trigger.");
+  }, []);
+
   const value = useMemo<StoreContextValue>(
     () => ({
       bundles: Object.values(bundlesMap).sort(
@@ -364,6 +394,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       startExecution,
       updateExecutionStep,
       failExecution,
+      generateWebhookTrigger,
+      toggleWebhookTrigger,
     }),
     [
       bundlesMap,
@@ -380,6 +412,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       startExecution,
       updateExecutionStep,
       failExecution,
+      generateWebhookTrigger,
+      toggleWebhookTrigger,
     ]
   );
 
