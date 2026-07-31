@@ -85,6 +85,28 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     };
   }, [status]);
 
+  useEffect(() => {
+    if (status !== "authenticated") return;
+    // Live multi-user sync: any mutation route broadcasts the fresh bundle
+    // after it commits (src/lib/broadcastBundle.ts), so another signed-in
+    // user's action on this use case shows up here without a reload.
+    const source = new EventSource("/api/use-cases/events");
+    source.onmessage = (event) => {
+      try {
+        const { useCaseId, bundle } = JSON.parse(event.data) as {
+          useCaseId: string;
+          bundle: UseCaseBundle;
+        };
+        setBundlesMap((prev) => ({ ...prev, [useCaseId]: bundle }));
+      } catch {
+        // Skip a malformed event rather than crash the subscription.
+      }
+    };
+    return () => {
+      source.close();
+    };
+  }, [status]);
+
   const setActiveId = useCallback((id: string) => {
     setActiveIdState(id);
     window.sessionStorage.setItem(ACTIVE_ID_KEY, id);

@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { canAccessDeveloperTools, ROLE_LABELS, useAuth } from "@/lib/auth";
+import { useAuth } from "@/lib/auth";
+import { canAccessDeveloperTools, ROLE_LABELS } from "@/lib/roles";
 
 const CONTROL_PLANE_LINKS = [
   { href: "/guide", label: "Guide" },

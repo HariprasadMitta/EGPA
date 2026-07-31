@@ -2,6 +2,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { GOVERNANCE_TEMPLATES } from "@/lib/governance";
 import { toGate, toRecommendation } from "@/lib/dbMapping";
+import { broadcastBundle } from "@/lib/broadcastBundle";
 
 export const runtime = "nodejs";
 
@@ -59,6 +60,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     }),
     prisma.useCase.update({ where: { id }, data: { status: "recommended" } }),
   ]);
+
+  await broadcastBundle(id);
 
   return Response.json({ recommendation: toRecommendation(recommendation), gate: toGate(gate) });
 }

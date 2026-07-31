@@ -1,6 +1,7 @@
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { toExecutionRun } from "@/lib/dbMapping";
+import { broadcastBundle } from "@/lib/broadcastBundle";
 
 export const runtime = "nodejs";
 
@@ -50,6 +51,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     where: { id: body.executionId },
     include: { steps: true },
   });
+
+  await broadcastBundle(id);
 
   return Response.json({ execution: toExecutionRun(created) });
 }

@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { canAccessDeveloperTools, useAuth } from "@/lib/auth";
+import { useAuth } from "@/lib/auth";
+import { canAccessDeveloperTools } from "@/lib/roles";
 import { useStore } from "@/lib/store";
 import { useMlOps } from "@/lib/mlops";
 import { RiskBadge } from "@/components/RiskBadge";

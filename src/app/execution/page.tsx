@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { canAccessDeveloperTools, useAuth } from "@/lib/auth";
+import { useAuth } from "@/lib/auth";
+import { canAccessDeveloperTools } from "@/lib/roles";
 import { useStore } from "@/lib/store";
 import { readSseEvents } from "@/lib/sse";
 import { RiskBadge } from "@/components/RiskBadge";

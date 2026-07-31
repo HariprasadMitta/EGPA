@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { canApproveArb, useAuth } from "@/lib/auth";
+import { useAuth } from "@/lib/auth";
+import { canApproveArb } from "@/lib/roles";
 import { useStore } from "@/lib/store";
 import { RiskBadge } from "@/components/RiskBadge";
 

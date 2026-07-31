@@ -9,7 +9,7 @@ import {
   MCP_EXPLAINER,
   CatalogEntry,
 } from "@/lib/patternLibrary";
-import { ROLE_LABELS } from "@/lib/auth";
+import { ROLE_LABELS } from "@/lib/roles";
 
 interface RoadmapStep {
   n: number;

@@ -2,6 +2,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { classifyRisk } from "@/lib/governance";
 import { toUseCase, toUseCaseBundle, USE_CASE_INCLUDE } from "@/lib/dbMapping";
+import { broadcastBundle } from "@/lib/broadcastBundle";
 import {
   AutonomyLevel,
   DataSensitivity,
@@ -74,6 +75,8 @@ export async function POST(request: Request) {
       ownerUserId: session.user.id,
     },
   });
+
+  await broadcastBundle(id);
 
   return Response.json({ useCase: toUseCase(row) });
 }

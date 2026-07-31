@@ -1,6 +1,7 @@
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { toExecutionRun } from "@/lib/dbMapping";
+import { broadcastBundle } from "@/lib/broadcastBundle";
 
 export const runtime = "nodejs";
 
@@ -11,7 +12,7 @@ export async function PATCH(
   const session = await auth();
   if (!session?.user) return Response.json({ error: "Sign in required." }, { status: 401 });
 
-  const { executionId } = await params;
+  const { id: useCaseId, executionId } = await params;
 
   let body: { error: string };
   try {
@@ -25,6 +26,8 @@ export async function PATCH(
     data: { status: "failed", error: body.error, completedAt: new Date() },
     include: { steps: true },
   });
+
+  await broadcastBundle(useCaseId);
 
   return Response.json({ execution: toExecutionRun(updated) });
 }

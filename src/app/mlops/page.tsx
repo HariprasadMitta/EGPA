@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { canAccessDeveloperTools, useAuth } from "@/lib/auth";
+import { useAuth } from "@/lib/auth";
+import { canAccessDeveloperTools } from "@/lib/roles";
 import { useMlOps } from "@/lib/mlops";
 import { randomCodeVerifier, codeChallengeFromVerifier } from "@/lib/pkce";
 import { chunkText, toEmbeddingVector, cosineSimilarity } from "@/lib/ragUtils";

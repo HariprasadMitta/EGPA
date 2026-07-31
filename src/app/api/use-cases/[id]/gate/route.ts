@@ -1,7 +1,8 @@
 import { auth } from "@/auth";
-import { canApproveArb } from "@/lib/auth";
+import { canApproveArb } from "@/lib/roles";
 import { prisma } from "@/lib/prisma";
 import { toGate } from "@/lib/dbMapping";
+import { broadcastBundle } from "@/lib/broadcastBundle";
 import { UserRole } from "@/types";
 
 export const runtime = "nodejs";
@@ -35,6 +36,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       where: { useCaseId: id },
       data: { acknowledgedItems },
     });
+    await broadcastBundle(id);
     return Response.json({ gate: toGate(updated) });
   }
 
@@ -47,6 +49,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       prisma.governanceGate.update({ where: { useCaseId: id }, data: { acknowledged: true } }),
       prisma.useCase.update({ where: { id }, data: { status: "gated" } }),
     ]);
+    await broadcastBundle(id);
     return Response.json({ gate: toGate(updated) });
   }
 
@@ -62,6 +65,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         arbApprovedAt: new Date(),
       },
     });
+    await broadcastBundle(id);
     return Response.json({ gate: toGate(updated) });
   }
 

@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
-import { ROLE_DESCRIPTIONS, ROLE_LABELS } from "@/lib/auth";
+import { ROLE_DESCRIPTIONS, ROLE_LABELS } from "@/lib/roles";
 import { UserRole } from "@/types";
 
 const ROLES: UserRole[] = ["requester", "steward", "governance-owner", "developer", "arb", "admin"];

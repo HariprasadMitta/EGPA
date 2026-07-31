@@ -1,6 +1,7 @@
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { toExecutionRun } from "@/lib/dbMapping";
+import { broadcastBundle } from "@/lib/broadcastBundle";
 import { SubAgentStepStatus } from "@/types";
 
 export const runtime = "nodejs";
@@ -63,6 +64,8 @@ export async function PATCH(
     where: { id: executionId },
     include: { steps: true },
   });
+
+  await broadcastBundle(useCaseId);
 
   return Response.json({ execution: toExecutionRun(updated) });
 }

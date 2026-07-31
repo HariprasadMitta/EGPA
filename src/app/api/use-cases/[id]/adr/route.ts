@@ -2,6 +2,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { buildADRContent } from "@/lib/adr";
 import { toAdr, toGate, toRecommendation, toUseCase, USE_CASE_INCLUDE } from "@/lib/dbMapping";
+import { broadcastBundle } from "@/lib/broadcastBundle";
 
 export const runtime = "nodejs";
 
@@ -29,6 +30,8 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
   if (gate.acknowledged) {
     await prisma.useCase.update({ where: { id }, data: { status: "approved" } });
   }
+
+  await broadcastBundle(id);
 
   return Response.json({ adr: toAdr(adr) });
 }
