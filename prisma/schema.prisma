@@ -47,6 +47,7 @@ model UseCase {
   riskTier           String // RiskTier
   status             String // UseCaseStatus
   createdAt          DateTime @default(now())
+  killSwitchEngaged  Boolean  @default(false)
 
   ownerUser   User   @relation(fields: [ownerUserId], references: [id])
   ownerUserId String
@@ -112,8 +113,9 @@ model ExecutionRun {
   totalCostUsd       Float     @default(0)
   error              String?
 
-  useCase UseCase        @relation(fields: [useCaseId], references: [id])
-  steps   SubAgentStep[]
+  useCase      UseCase        @relation(fields: [useCaseId], references: [id])
+  steps        SubAgentStep[]
+  toolCallLogs ToolCallLog[]
 }
 
 model SubAgentStep {
@@ -134,4 +136,20 @@ model SubAgentStep {
   executionRunId String
 
   @@unique([executionRunId, stepId])
+}
+
+// Real audit trail of every tool invocation during execution - not just
+// narration. One row per actual real call to a bound tool (e.g.
+// knowledge_base_search), implementing the "Audit logging" governance
+// control for real instead of a one-time checkbox acknowledgment.
+model ToolCallLog {
+  id        String   @id @default(cuid())
+  stepId    String // app-facing step id, e.g. "step-0"
+  toolName  String
+  argsJson  String
+  result    String
+  createdAt DateTime @default(now())
+
+  executionRun   ExecutionRun @relation(fields: [executionRunId], references: [id])
+  executionRunId String
 }

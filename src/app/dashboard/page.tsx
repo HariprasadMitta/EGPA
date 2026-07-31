@@ -203,7 +203,9 @@ export default function DashboardPage() {
                           </p>
                           {step.output && <p className="mt-1">{step.output}</p>}
                           <p className="mt-2 text-xs text-[var(--muted)]">
-                            {step.provider ?? "-"} &middot; ${step.costUsd.toFixed(4)}
+                            {step.provider ?? "-"} &middot; ${step.costUsd.toFixed(4)} &middot;{" "}
+                            {step.toolCallCount} real tool call{step.toolCallCount === 1 ? "" : "s"}{" "}
+                            (audit-logged)
                           </p>
                         </div>
                       ))}

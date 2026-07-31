@@ -300,9 +300,22 @@ export default function ExecutionPage() {
         outputTokens: 0,
         costUsd: 0,
         durationMs: 0,
+        toolCallCount: 0,
       }));
 
-      await startExecution(useCase.id, executionId, runNumber, masterAgentSummary, steps);
+      try {
+        await startExecution(useCase.id, executionId, runNumber, masterAgentSummary, steps);
+      } catch (err) {
+        // No ExecutionRun row exists yet at this point (rejected before
+        // creation - e.g. kill switch engaged, gate not cleared) - show the
+        // real error directly rather than falling through to the outer
+        // catch's failExecution, which would try to update a row that was
+        // never created.
+        setPlanError((err as Error).message);
+        setRunning(false);
+        setCurrentExecutionId(null);
+        return;
+      }
 
       for (const step of steps) {
         await updateExecutionStep(useCase.id, executionId, step.id, { status: "running" });
@@ -315,6 +328,8 @@ export default function ExecutionPage() {
               useCaseTitle: useCase.title,
               useCaseDescription: useCase.description,
               masterAgentSummary,
+              executionId,
+              stepId: step.id,
               step: { name: step.name, tool: step.tool, task: step.task },
             }),
           });

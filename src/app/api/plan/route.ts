@@ -69,6 +69,7 @@ Description:
 ${body.description}`;
 
   const model = buildAgentModel(provider);
+  const allowedTools = new Set(body.tools);
   const start = Date.now();
   const encoder = new TextEncoder();
 
@@ -91,8 +92,14 @@ ${body.description}`;
           if (!line) continue;
           try {
             const parsed = JSON.parse(line);
-            if (parsed.type === "step") stepCount += 1;
-            if (parsed.type === "step" && stepCount > MAX_STEPS) continue;
+            if (parsed.type === "step") {
+              // Tool allowlist enforcement: never forward a step whose tool
+              // isn't actually in the recommendation's approved tool stack,
+              // whether from a model mistake or a tampered prompt.
+              if (typeof parsed.tool !== "string" || !allowedTools.has(parsed.tool)) continue;
+              stepCount += 1;
+              if (stepCount > MAX_STEPS) continue;
+            }
             send(parsed);
           } catch {
             // Garbled/incomplete line - skip rather than crash the stream,

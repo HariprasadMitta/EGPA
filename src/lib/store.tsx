@@ -23,7 +23,10 @@ interface StoreContextValue {
   bundles: UseCaseBundle[];
   active: UseCaseBundle | null;
   setActiveId: (id: string) => void;
-  createUseCase: (input: Omit<UseCase, "id" | "status" | "createdAt">) => Promise<UseCase>;
+  createUseCase: (
+    input: Omit<UseCase, "id" | "status" | "createdAt" | "killSwitchEngaged">
+  ) => Promise<UseCase>;
+  toggleKillSwitch: (useCaseId: string, engaged: boolean) => Promise<void>;
   setRecommendation: (useCaseId: string, recommendation: Recommendation) => Promise<void>;
   acknowledgeGateItem: (useCaseId: string, control: string) => Promise<void>;
   finalizeGate: (useCaseId: string) => Promise<void>;
@@ -113,7 +116,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const createUseCase = useCallback(
-    async (input: Omit<UseCase, "id" | "status" | "createdAt">): Promise<UseCase> => {
+    async (
+      input: Omit<UseCase, "id" | "status" | "createdAt" | "killSwitchEngaged">
+    ): Promise<UseCase> => {
       const res = await fetch("/api/use-cases", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -131,6 +136,21 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     },
     [setActiveId]
   );
+
+  const toggleKillSwitch = useCallback(async (useCaseId: string, engaged: boolean) => {
+    const res = await fetch(`/api/use-cases/${useCaseId}/kill-switch`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ engaged }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Failed to update kill switch.");
+    setBundlesMap((prev) => {
+      const existing = prev[useCaseId];
+      if (!existing) return prev;
+      return { ...prev, [useCaseId]: { ...existing, useCase: data.useCase } };
+    });
+  }, []);
 
   const setRecommendation = useCallback(async (useCaseId: string, recommendation: Recommendation) => {
     const res = await fetch(`/api/use-cases/${useCaseId}/recommendation`, {
@@ -334,6 +354,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       active: activeId ? bundlesMap[activeId] ?? null : null,
       setActiveId,
       createUseCase,
+      toggleKillSwitch,
       setRecommendation,
       acknowledgeGateItem,
       finalizeGate,
@@ -349,6 +370,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       activeId,
       setActiveId,
       createUseCase,
+      toggleKillSwitch,
       setRecommendation,
       acknowledgeGateItem,
       finalizeGate,

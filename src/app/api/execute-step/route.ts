@@ -1,8 +1,10 @@
 import { StateGraph, MessagesAnnotation, START, END } from "@langchain/langgraph";
-import { ToolNode, toolsCondition } from "@langchain/langgraph/prebuilt";
-import { HumanMessage, SystemMessage, AIMessageChunk } from "@langchain/core/messages";
+import { toolsCondition } from "@langchain/langgraph/prebuilt";
+import { AIMessage, HumanMessage, SystemMessage, ToolMessage, AIMessageChunk } from "@langchain/core/messages";
 import { buildAgentModel, resolveAgentProvider } from "@/lib/agentModel";
 import { knowledgeBaseSearch } from "@/lib/knowledgeBase";
+import { logToolCall } from "@/lib/toolCallLog";
+import { prisma } from "@/lib/prisma";
 import { estimateCostUsd } from "@/lib/pricing";
 import { clientIp } from "@/lib/rateLimit";
 import { executionLimiter } from "@/lib/executionLimiter";
@@ -13,6 +15,8 @@ interface ExecuteStepRequestBody {
   useCaseTitle: string;
   useCaseDescription: string;
   masterAgentSummary: string;
+  executionId: string;
+  stepId: string;
   step: { name: string; tool: string; task: string };
 }
 
@@ -29,7 +33,10 @@ like "As the sub-agent...".`;
 
 const TOOLS = [knowledgeBaseSearch];
 
-function buildGraph(provider: ReturnType<typeof resolveAgentProvider>) {
+// A custom tools node (rather than the prebuilt ToolNode) so every real
+// invocation is persisted to ToolCallLog - real audit logging of the
+// "Audit logging" governance control, not just a one-time acknowledgment.
+function buildGraph(provider: ReturnType<typeof resolveAgentProvider>, executionId: string, stepId: string) {
   const model = buildAgentModel(provider).bindTools(TOOLS);
 
   async function callModel(state: typeof MessagesAnnotation.State) {
@@ -37,9 +44,26 @@ function buildGraph(provider: ReturnType<typeof resolveAgentProvider>) {
     return { messages: [response] };
   }
 
+  async function callTools(state: typeof MessagesAnnotation.State) {
+    const lastMessage = state.messages[state.messages.length - 1] as AIMessage;
+    const toolMessages: ToolMessage[] = [];
+    for (const call of lastMessage.tool_calls ?? []) {
+      const argsJson = JSON.stringify(call.args);
+      let result: string;
+      try {
+        result = String(await knowledgeBaseSearch.invoke(call.args as { query: string }));
+      } catch (err) {
+        result = `Tool error: ${(err as Error).message}`;
+      }
+      await logToolCall({ executionId, stepId, toolName: call.name, argsJson, result });
+      toolMessages.push(new ToolMessage({ content: result, tool_call_id: call.id ?? "" }));
+    }
+    return { messages: toolMessages };
+  }
+
   return new StateGraph(MessagesAnnotation)
     .addNode("agent", callModel)
-    .addNode("tools", new ToolNode(TOOLS))
+    .addNode("tools", callTools)
     .addEdge(START, "agent")
     .addConditionalEdges("agent", toolsCondition, ["tools", END])
     .addEdge("tools", "agent")
@@ -67,8 +91,24 @@ export async function POST(request: Request) {
     return Response.json({ error: "Invalid request body." }, { status: 400 });
   }
 
-  if (!body.step?.name || !body.step?.tool || !body.step?.task) {
+  if (!body.step?.name || !body.step?.tool || !body.step?.task || !body.executionId || !body.stepId) {
     return Response.json({ error: "Missing required fields." }, { status: 400 });
+  }
+
+  const run = await prisma.executionRun.findUnique({
+    where: { id: body.executionId },
+    select: { useCaseId: true },
+  });
+  if (!run) return Response.json({ error: "Execution run not found." }, { status: 404 });
+  const useCase = await prisma.useCase.findUnique({
+    where: { id: run.useCaseId },
+    select: { killSwitchEngaged: true },
+  });
+  if (useCase?.killSwitchEngaged) {
+    return Response.json(
+      { error: "Kill switch is engaged for this use case - execution is blocked." },
+      { status: 403 }
+    );
   }
 
   const userMessage = `Use case: ${body.useCaseTitle}
@@ -77,7 +117,7 @@ Master agent's plan: ${body.masterAgentSummary}
 
 Your task: ${body.step.task}`;
 
-  const graph = buildGraph(provider);
+  const graph = buildGraph(provider, body.executionId, body.stepId);
   const start = Date.now();
   const encoder = new TextEncoder();
 

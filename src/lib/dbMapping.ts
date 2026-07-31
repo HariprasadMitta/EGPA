@@ -4,6 +4,7 @@ import type {
   GovernanceGate as DbGovernanceGate,
   Recommendation as DbRecommendation,
   SubAgentStep as DbSubAgentStep,
+  ToolCallLog as DbToolCallLog,
   UseCase as DbUseCase,
 } from "@prisma/client";
 import {
@@ -27,7 +28,7 @@ type FullUseCase = DbUseCase & {
   recommendation: DbRecommendation | null;
   gate: DbGovernanceGate | null;
   adrs: DbAdr[];
-  executions: (DbExecutionRun & { steps: DbSubAgentStep[] })[];
+  executions: (DbExecutionRun & { steps: DbSubAgentStep[]; toolCallLogs: DbToolCallLog[] })[];
 };
 
 export function toUseCase(row: DbUseCase): UseCase {
@@ -45,6 +46,7 @@ export function toUseCase(row: DbUseCase): UseCase {
     riskTier: row.riskTier as RiskTier,
     status: row.status as UseCaseStatus,
     createdAt: row.createdAt.toISOString(),
+    killSwitchEngaged: row.killSwitchEngaged,
   };
 }
 
@@ -93,7 +95,7 @@ export function latestAdr(adrs: DbAdr[]): ADR | null {
   return toAdr(latest);
 }
 
-export function toSubAgentStep(row: DbSubAgentStep): SubAgentStep {
+export function toSubAgentStep(row: DbSubAgentStep, toolCallCount = 0): SubAgentStep {
   return {
     id: row.stepId,
     name: row.name,
@@ -106,17 +108,24 @@ export function toSubAgentStep(row: DbSubAgentStep): SubAgentStep {
     outputTokens: row.outputTokens,
     costUsd: row.costUsd,
     durationMs: row.durationMs,
+    toolCallCount,
   };
 }
 
-export function toExecutionRun(row: DbExecutionRun & { steps: DbSubAgentStep[] }): ExecutionRun {
+export function toExecutionRun(
+  row: DbExecutionRun & { steps: DbSubAgentStep[]; toolCallLogs: DbToolCallLog[] }
+): ExecutionRun {
   const steps = [...row.steps].sort((a, b) => (a.stepId > b.stepId ? 1 : -1));
+  const countsByStepId = row.toolCallLogs.reduce<Record<string, number>>((acc, log) => {
+    acc[log.stepId] = (acc[log.stepId] ?? 0) + 1;
+    return acc;
+  }, {});
   return {
     id: row.id,
     runNumber: row.runNumber,
     useCaseId: row.useCaseId,
     masterAgentSummary: row.masterAgentSummary,
-    steps: steps.map(toSubAgentStep),
+    steps: steps.map((s) => toSubAgentStep(s, countsByStepId[s.stepId] ?? 0)),
     status: row.status as ExecutionRun["status"],
     startedAt: row.startedAt.toISOString(),
     completedAt: row.completedAt ? row.completedAt.toISOString() : null,
@@ -143,5 +152,5 @@ export const USE_CASE_INCLUDE = {
   recommendation: true,
   gate: true,
   adrs: true,
-  executions: { include: { steps: true } },
+  executions: { include: { steps: true, toolCallLogs: true } },
 } as const;

@@ -45,6 +45,7 @@ export interface UseCase {
   riskTier: RiskTier;
   status: UseCaseStatus;
   createdAt: string;
+  killSwitchEngaged: boolean;
 }
 
 export interface Recommendation {
@@ -140,6 +141,7 @@ export interface SubAgentStep {
   outputTokens: number;
   costUsd: number;
   durationMs: number;
+  toolCallCount: number;
 }
 
 export interface ExecutionRun {

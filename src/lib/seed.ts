@@ -37,6 +37,7 @@ function makeBundle(params: {
     steward: params.steward,
     riskTier,
     status: params.acknowledged ? "approved" : "gated",
+    killSwitchEngaged: false,
     createdAt: params.createdAt,
   };
 

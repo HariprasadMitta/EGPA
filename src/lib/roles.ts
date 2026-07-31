@@ -30,3 +30,7 @@ export function canAccessDeveloperTools(role: UserRole): boolean {
 export function canApproveArb(role: UserRole): boolean {
   return role === "arb" || role === "admin";
 }
+
+export function canToggleKillSwitch(role: UserRole): boolean {
+  return role === "governance-owner" || role === "admin";
+}

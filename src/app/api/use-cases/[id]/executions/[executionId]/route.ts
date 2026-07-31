@@ -24,7 +24,7 @@ export async function PATCH(
   const updated = await prisma.executionRun.update({
     where: { id: executionId },
     data: { status: "failed", error: body.error, completedAt: new Date() },
-    include: { steps: true },
+    include: { steps: true, toolCallLogs: true },
   });
 
   await broadcastBundle(useCaseId);

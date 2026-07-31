@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth";
-import { canApproveArb } from "@/lib/roles";
+import { canApproveArb, canToggleKillSwitch } from "@/lib/roles";
 import { useStore } from "@/lib/store";
 import { RiskBadge } from "@/components/RiskBadge";
 
@@ -17,7 +17,7 @@ const HITL_DESCRIPTIONS: Record<string, string> = {
 export default function GatePage() {
   const router = useRouter();
   const { user } = useAuth();
-  const { active, acknowledgeGateItem, finalizeGate, approveArb } = useStore();
+  const { active, acknowledgeGateItem, finalizeGate, approveArb, toggleKillSwitch } = useStore();
 
   if (!active || !active.gate) {
     return (
@@ -46,6 +46,7 @@ export default function GatePage() {
   const arbClear = !gate.requiresArbApproval || gate.arbApproved;
   const allAcknowledged = controlsAcknowledged && arbClear;
   const isArb = user ? canApproveArb(user.role) : false;
+  const canToggleKillSwitchRole = user ? canToggleKillSwitch(user.role) : false;
 
   function handleProceed() {
     finalizeGate(useCase.id);
@@ -55,6 +56,10 @@ export default function GatePage() {
   function handleArbApprove() {
     if (!user) return;
     approveArb(useCase.id);
+  }
+
+  function handleToggleKillSwitch() {
+    toggleKillSwitch(useCase.id, !useCase.killSwitchEngaged);
   }
 
   return (
@@ -67,6 +72,41 @@ export default function GatePage() {
           <p className="mt-1 text-sm text-[var(--muted)]">{useCase.title}</p>
         </div>
         <RiskBadge tier={useCase.riskTier} />
+      </div>
+
+      <div
+        className={`mt-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border p-5 ${
+          useCase.killSwitchEngaged
+            ? "border-[var(--tier-critical)]/40 bg-[var(--tier-critical-bg)]"
+            : "border-[var(--border)] bg-[var(--surface)]"
+        }`}
+      >
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
+            Kill switch &mdash; real, enforced at execution time
+          </p>
+          <p className="mt-1 text-sm">
+            {useCase.killSwitchEngaged
+              ? "Engaged - any execution attempt on this use case will be rejected by the server."
+              : "Not engaged - execution is allowed (subject to the gate and controls below)."}
+          </p>
+        </div>
+        {canToggleKillSwitchRole ? (
+          <button
+            onClick={handleToggleKillSwitch}
+            className={`rounded-full px-5 py-2 text-sm font-semibold text-white transition-colors ${
+              useCase.killSwitchEngaged
+                ? "bg-[var(--status-done)] hover:opacity-90"
+                : "bg-[var(--tier-critical)] hover:opacity-90"
+            }`}
+          >
+            {useCase.killSwitchEngaged ? "Disengage" : "Engage kill switch"}
+          </button>
+        ) : (
+          <span className="text-xs text-[var(--muted)]">
+            Only a Governance Owner or Admin can toggle this.
+          </span>
+        )}
       </div>
 
       <div className="mt-6 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6">

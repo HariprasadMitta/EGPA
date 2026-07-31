@@ -25,6 +25,15 @@ export async function PATCH(
 
   const { id: useCaseId, executionId, stepId } = await params;
 
+  const useCase = await prisma.useCase.findUnique({ where: { id: useCaseId } });
+  if (!useCase) return Response.json({ error: "Use case not found." }, { status: 404 });
+  if (useCase.killSwitchEngaged) {
+    return Response.json(
+      { error: "Kill switch is engaged for this use case - execution is blocked." },
+      { status: 403 }
+    );
+  }
+
   let body: StepPatchBody;
   try {
     body = await request.json();
@@ -62,7 +71,7 @@ export async function PATCH(
 
   const updated = await prisma.executionRun.findUniqueOrThrow({
     where: { id: executionId },
-    include: { steps: true },
+    include: { steps: true, toolCallLogs: true },
   });
 
   await broadcastBundle(useCaseId);
