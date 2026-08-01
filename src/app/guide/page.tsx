@@ -10,7 +10,8 @@ import {
   MCP_EXPLAINER,
   CatalogEntry,
 } from "@/lib/patternLibrary";
-import { ROLE_LABELS } from "@/lib/roles";
+import { ROLE_DESCRIPTIONS, ROLE_LABELS } from "@/lib/roles";
+import { UserRole } from "@/types";
 
 function LayersIcon() {
   return (
@@ -83,7 +84,7 @@ const ROADMAP: RoadmapStep[] = [
     n: 1,
     title: "Intake",
     description:
-      "Answer the structured questionnaire and describe the use case in free text. Nothing here is optional - the risk tier is computed from these answers.",
+      "Fill in the title, description, owner, and steward, then choose the 4 questionnaire options (data sensitivity, autonomy level, integration surface, expected users) - the \"Live computed risk tier\" box updates as you go, so you see the consequence of each choice before you submit. Click \"Get recommendation\" to create the real use case and call the recommendation engine.",
     role: ROLE_LABELS.requester,
     href: "/intake",
   },
@@ -91,7 +92,7 @@ const ROADMAP: RoadmapStep[] = [
     n: 2,
     title: "Recommendation",
     description:
-      "A real LLM call proposes a framework, tool stack, harness pattern, loop pattern, and context strategy - plus the architecture diagram of the master agent and its sub-agents.",
+      "A real LLM call proposes a framework, tool stack, harness pattern, loop pattern, and context strategy, plus a clickable architecture diagram (click the Master Agent or any sub-agent for its role) and a read-only preview of the OSCAR governance checklist this risk tier requires. Click \"Proceed to governance gate\" to continue.",
     role: ROLE_LABELS.steward,
     href: "/recommendation",
   },
@@ -99,7 +100,7 @@ const ROADMAP: RoadmapStep[] = [
     n: 3,
     title: "Governance Gate",
     description:
-      "The required controls for the computed risk tier must all be acknowledged before anything can proceed - enforced, not advisory.",
+      "Check off every required control for this risk tier - all of them, not a subset, before \"Proceed to ADR\" unlocks. Critical-tier use cases also need a named ARB member to click \"Approve as {name}\" here - no one else can clear that specific box. A Governance Owner or Admin can also engage the kill-switch here at any time, real and enforced (Phase 7): flipping it blocks the next in-progress execution step server-side, not just in the UI.",
     role: ROLE_LABELS["governance-owner"],
     href: "/gate",
   },
@@ -107,7 +108,7 @@ const ROADMAP: RoadmapStep[] = [
     n: 4,
     title: "ADR",
     description:
-      "A versioned Architecture Decision Record is assembled automatically from everything decided so far - downloadable and traceable.",
+      "A versioned Architecture Decision Record assembles automatically from everything decided so far the moment the gate clears. Use \"Copy to clipboard\" or \"Download .md\" to take it with you, or \"View portfolio\" to move on.",
     role: ROLE_LABELS["governance-owner"],
     href: "/adr",
   },
@@ -115,7 +116,7 @@ const ROADMAP: RoadmapStep[] = [
     n: 5,
     title: "Execution",
     description:
-      "Developers get single-sign-on access to actually run the approved architecture: a master agent plans, then real sub-agent LLM calls execute each step.",
+      "Developer/Admin-only. Click \"Run execution\" to watch a real master agent plan the steps, then real sub-agent LLM calls execute each one live (tokens streaming in as they're generated, real tool calls, real cost). The Automation trigger panel here lets you generate a real webhook token (Phase 8) so an execution can start from a curl call or a real cron service instead of a click.",
     role: ROLE_LABELS.developer,
     href: "/execution",
   },
@@ -123,9 +124,138 @@ const ROADMAP: RoadmapStep[] = [
     n: 6,
     title: "Observability",
     description:
-      "Real token/cost/duration usage and a real step-by-step decision trace from every execution, all in one dashboard - nothing simulated.",
+      "Real token/cost/duration usage and a real step-by-step decision trace from every execution this use case has run, all in one dashboard - nothing simulated. Also shows your Model Builder connection status if you're a Developer/Admin.",
     role: "All roles",
     href: "/dashboard",
+  },
+];
+
+interface RoleGuide {
+  role: UserRole;
+  pages: string;
+  benefit: string;
+}
+
+const ROLE_GUIDE: RoleGuide[] = [
+  {
+    role: "requester",
+    pages: "Intake, Portfolio, Recommendation, ADR (read)",
+    benefit: "Turn a business idea into a governed, documented AI use case without needing to know AI architecture yourself - submit a description and get a real recommendation back.",
+  },
+  {
+    role: "steward",
+    pages: "Recommendation, Portfolio, Guide (pattern library)",
+    benefit: "Validate the recommended framework and tool stack against real technical constraints before it goes to governance sign-off - the pattern library gives you the vocabulary to do that quickly.",
+  },
+  {
+    role: "governance-owner",
+    pages: "Governance Gate, ADR, Portfolio",
+    benefit: "Enforce that the required controls for a given risk tier are actually satisfied, not just acknowledged in spirit - and can halt a running execution in real time via the kill-switch if something goes wrong.",
+  },
+  {
+    role: "developer",
+    pages: "Execution, Model Builder, Observability",
+    benefit: "The only role that can actually run an approved use case and watch a real multi-agent execution happen, or wire up a webhook so it can start itself.",
+  },
+  {
+    role: "arb",
+    pages: "Governance Gate (Critical tier only)",
+    benefit: "The one sign-off no one else can substitute for on Critical-tier use cases - a real named-reviewer control, not a rubber stamp.",
+  },
+  {
+    role: "admin",
+    pages: "Everything above",
+    benefit: "Full access for testing or demoing the whole pipeline end to end as any role would experience it.",
+  },
+];
+
+interface BeyondPageGuide {
+  title: string;
+  href: string;
+  access: string;
+  description: string;
+}
+
+const BEYOND_PIPELINE: BeyondPageGuide[] = [
+  {
+    title: "Portfolio",
+    href: "/portfolio",
+    access: "Signed in",
+    description:
+      "Every use case ever submitted, across business units, in one table - real risk tier, real status, and a pipeline-progress row you can click at any point to jump straight to that use case's stage. This is also how you get back to a use case you left mid-flow.",
+  },
+  {
+    title: "Model Registry",
+    href: "/registry",
+    access: "Signed in",
+    description:
+      "A searchable, filterable catalog of models and MCP servers with their approval status and which risk tiers they're allowed for. Seeded sample data today - in a connected deployment this would sync live from the AI Gateway's model allowlist.",
+  },
+  {
+    title: "Model Builder",
+    href: "/mlops",
+    access: "Developer / Admin",
+    description:
+      "Connect your own free-tier OpenRouter or Hugging Face account (real OAuth, no key ever pasted in), Ping either one to check it's actually reachable, and try a small real RAG demo - paste text, it's really embedded and chunked, then ask a question and get real cosine-similarity retrieval back.",
+  },
+];
+
+interface ConceptGuide {
+  title: string;
+  tag: string;
+  description: string;
+  href: string;
+  linkLabel: string;
+}
+
+const CONCEPTS: ConceptGuide[] = [
+  {
+    title: "Risk tier scoring (OSCAR)",
+    tag: "Computed, not chosen",
+    description:
+      "Every use case's risk tier (Low/Medium/High/Critical) is computed from your Intake answers - data sensitivity x autonomy level x integration surface - never picked directly. Higher tiers require more approvals, more controls, and a tighter iteration ceiling.",
+    href: "/intake",
+    linkLabel: "See it compute live on Intake",
+  },
+  {
+    title: "HITL tier",
+    tag: "Sets the human checkpoint",
+    description:
+      "How much a human needs to be in the loop for this use case, from \"none\" up to \"manual\" (every action needs a human). Set by the risk tier's governance template, shown on the Gate page.",
+    href: "/gate",
+    linkLabel: "See it on the Governance Gate",
+  },
+  {
+    title: "ARB approval",
+    tag: "Critical tier only",
+    description:
+      "A named Review Board member's real sign-off, required before a Critical-tier use case can proceed - the one control only the arb (or admin) role can clear.",
+    href: "/gate",
+    linkLabel: "See it on the Governance Gate",
+  },
+  {
+    title: "Kill-switch",
+    tag: "Real - Phase 7",
+    description:
+      "A Governance Owner or Admin can engage this on any use case at any time. It's enforced server-side at the moment the next execution step would run, not just a UI flag - flip it mid-run and the next step genuinely fails to persist.",
+    href: "/gate",
+    linkLabel: "See it on the Governance Gate",
+  },
+  {
+    title: "Automation trigger (webhook)",
+    tag: "Real - Phase 8",
+    description:
+      "A Developer/Admin can generate a real bearer token scoped to one use case, then start a real execution from outside the browser - curl, a real cron service, GitHub Actions - with zero human clicking \"Run execution.\" Same governance checks apply either way.",
+    href: "/execution",
+    linkLabel: "See it on Execution",
+  },
+  {
+    title: "AI Gateway",
+    tag: "Real, local-only - Phase 10",
+    description:
+      "A self-hosted LiteLLM Proxy sits in front of every real LLM call this app makes, holding the actual provider keys so the app only ever holds one scoped virtual key. It picks up automatic fallback between providers if one fails - the app itself no longer decides that.",
+    href: "/",
+    linkLabel: "See the Control Plane vs. Gateway framing on the landing page",
   },
 ];
 
@@ -255,16 +385,112 @@ function PatternLibrary() {
   );
 }
 
+const QUICK_NAV = [
+  { id: "roles", label: "Who this is for" },
+  { id: "pipeline", label: "How it works" },
+  { id: "beyond", label: "Beyond the pipeline" },
+  { id: "concepts", label: "Governance concepts" },
+  { id: "library", label: "Pattern & Tool Library" },
+];
+
+function RoleCard({ guide, index }: { guide: RoleGuide; index: number }) {
+  return (
+    <div
+      className="fade-slide-up rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 transition-all hover:-translate-y-0.5 hover:border-[var(--accent)]/50 hover:shadow-md"
+      style={{ animationDelay: `${index * 50}ms` }}
+    >
+      <div className="flex items-center gap-2.5">
+        <span className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-[var(--brand)] text-xs font-bold text-white">
+          {ROLE_LABELS[guide.role].slice(0, 1)}
+        </span>
+        <h3 className="font-semibold text-[var(--brand-strong)]">{ROLE_LABELS[guide.role]}</h3>
+      </div>
+      <p className="mt-3 text-xs text-[var(--muted)]">{ROLE_DESCRIPTIONS[guide.role]}</p>
+      <p className="mt-3 text-xs">
+        <span className="font-semibold text-[var(--accent)]">Pages you&apos;ll use: </span>
+        <span className="text-[var(--muted)]">{guide.pages}</span>
+      </p>
+      <p className="mt-2 text-xs">
+        <span className="font-semibold text-[var(--tier-low)]">Benefit: </span>
+        <span className="text-[var(--muted)]">{guide.benefit}</span>
+      </p>
+    </div>
+  );
+}
+
+function BeyondCard({ page, index }: { page: BeyondPageGuide; index: number }) {
+  return (
+    <Link
+      href={page.href}
+      className="fade-slide-up flex flex-col rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 transition-all hover:-translate-y-0.5 hover:border-[var(--accent)]/50 hover:shadow-md"
+      style={{ animationDelay: `${index * 50}ms` }}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="font-semibold text-[var(--brand-strong)]">{page.title}</h3>
+        <span className="rounded-full bg-[var(--status-current-bg)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--status-current)]">
+          {page.access}
+        </span>
+      </div>
+      <p className="mt-2 text-sm text-[var(--muted)]">{page.description}</p>
+    </Link>
+  );
+}
+
+function ConceptCard({ concept, index }: { concept: ConceptGuide; index: number }) {
+  return (
+    <div
+      className="fade-slide-up rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 transition-all hover:-translate-y-0.5 hover:border-[var(--accent)]/50 hover:shadow-md"
+      style={{ animationDelay: `${index * 50}ms` }}
+    >
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="font-semibold text-[var(--brand-strong)]">{concept.title}</h3>
+        <span className="rounded-full bg-[var(--tier-low-bg)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--tier-low)]">
+          {concept.tag}
+        </span>
+      </div>
+      <p className="mt-2 text-sm text-[var(--muted)]">{concept.description}</p>
+      <Link href={concept.href} className="mt-3 inline-block text-xs font-semibold text-[var(--accent)]">
+        {concept.linkLabel} &rarr;
+      </Link>
+    </div>
+  );
+}
+
 export default function GuidePage() {
   return (
     <div className="mx-auto max-w-5xl px-6 py-12">
       <h1 className="text-2xl font-bold text-[var(--brand-strong)]">Guide</h1>
       <p className="mt-2 max-w-2xl text-[var(--muted)]">
-        Where to start, how the pipeline fits together, and a reference library
-        of the architecture patterns and tools this advisor draws from.
+        The one-stop reference: who this is for, what every page and button
+        actually does, and the vocabulary the recommendation engine draws
+        from.
       </p>
 
-      <section className="mt-8">
+      <nav className="sticky top-0 z-10 mt-6 flex flex-wrap gap-2 border-y border-[var(--border)] bg-[var(--background)]/95 py-3 backdrop-blur">
+        {QUICK_NAV.map((item) => (
+          <a
+            key={item.id}
+            href={`#${item.id}`}
+            className="rounded-full border border-[var(--border)] bg-[var(--surface)] px-4 py-1.5 text-sm font-medium text-[var(--foreground)] transition-colors hover:bg-[var(--background)]"
+          >
+            {item.label}
+          </a>
+        ))}
+      </nav>
+
+      <section id="roles" className="mt-10 scroll-mt-20">
+        <h2 className="text-lg font-bold text-[var(--brand-strong)]">Who this is for</h2>
+        <p className="mt-1 text-sm text-[var(--muted)]">
+          Every role sees the same real data - what differs is which pages you can act on.
+        </p>
+        <div className="mt-5 grid gap-4 sm:grid-cols-2">
+          {ROLE_GUIDE.map((guide, i) => (
+            <RoleCard key={guide.role} guide={guide} index={i} />
+          ))}
+        </div>
+      </section>
+
+      <section id="pipeline" className="mt-12 scroll-mt-20">
         <h2 className="text-lg font-bold text-[var(--brand-strong)]">How it works, step by step</h2>
         <p className="mt-1 text-sm text-[var(--muted)]">Click any stage to jump straight there.</p>
 
@@ -292,7 +518,31 @@ export default function GuidePage() {
         </div>
       </section>
 
-      <section className="mt-12">
+      <section id="beyond" className="mt-12 scroll-mt-20">
+        <h2 className="text-lg font-bold text-[var(--brand-strong)]">Beyond the pipeline</h2>
+        <p className="mt-1 text-sm text-[var(--muted)]">
+          Three more real pages that aren&apos;t part of the linear flow above.
+        </p>
+        <div className="mt-5 grid gap-4 sm:grid-cols-3">
+          {BEYOND_PIPELINE.map((page, i) => (
+            <BeyondCard key={page.href} page={page} index={i} />
+          ))}
+        </div>
+      </section>
+
+      <section id="concepts" className="mt-12 scroll-mt-20">
+        <h2 className="text-lg font-bold text-[var(--brand-strong)]">Governance concepts, explained</h2>
+        <p className="mt-1 text-sm text-[var(--muted)]">
+          The terms used across the pipeline above, in one place.
+        </p>
+        <div className="mt-5 grid gap-4 sm:grid-cols-2">
+          {CONCEPTS.map((concept, i) => (
+            <ConceptCard key={concept.title} concept={concept} index={i} />
+          ))}
+        </div>
+      </section>
+
+      <section id="library" className="mt-12 scroll-mt-20">
         <h2 className="text-lg font-bold text-[var(--brand-strong)]">Pattern &amp; Tool Library</h2>
         <p className="mt-1 text-sm text-[var(--muted)]">
           The vocabulary the recommendation engine draws from &mdash; independent
