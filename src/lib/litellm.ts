@@ -5,6 +5,7 @@
 // this reads LiteLLM's real per-request cost and provider attribution
 // straight off the response instead of falling back to an estimate.
 import { estimateCostUsd } from "@/lib/pricing";
+import { directChatCompletion } from "@/lib/llmDirect";
 
 export interface GatewayCompletionResult {
   text: string;
@@ -19,6 +20,11 @@ export async function gatewayChatCompletion(
   user: string,
   maxTokens: number
 ): Promise<GatewayCompletionResult> {
+  // Same emergency-only escape hatch as src/lib/agentModel.ts - see there.
+  if (process.env.LLM_DIRECT_MODE === "true") {
+    return directChatCompletion(system, user, maxTokens);
+  }
+
   if (!process.env.LITELLM_BASE_URL || !process.env.LITELLM_VIRTUAL_KEY) {
     throw new Error(
       "AI Gateway not configured. Set LITELLM_BASE_URL and LITELLM_VIRTUAL_KEY (see litellm-config.yaml)."

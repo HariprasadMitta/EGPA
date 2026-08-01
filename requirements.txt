@@ -1,0 +1,4 @@
+# Pins the exact LiteLLM proxy version already verified working locally
+# (see .venv-litellm) - used by render.yaml to host the real AI Gateway
+# with a public URL, replacing the local-only .venv-litellm process.
+litellm[proxy]==1.94.1

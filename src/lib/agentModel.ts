@@ -1,4 +1,5 @@
 import { ChatOpenAI } from "@langchain/openai";
+import { buildDirectAgentModel } from "@/lib/llmDirect";
 
 // Real AI Gateway (LiteLLM Proxy, Phase 10, local-only for now - see
 // litellm-config.yaml). The app no longer picks a provider or holds a raw
@@ -22,6 +23,14 @@ export interface AgentGatewayHandle {
 }
 
 export function buildAgentModel(): AgentGatewayHandle {
+  // Emergency-only escape hatch (LLM_DIRECT_MODE=true) - the real Gateway
+  // is hosted for real (render.yaml) and used by default; this exists so a
+  // problem with that free-tier host doesn't take the whole app down with
+  // it. Never set locally - local dev always goes through the real Gateway.
+  if (process.env.LLM_DIRECT_MODE === "true") {
+    return buildDirectAgentModel();
+  }
+
   if (!process.env.LITELLM_BASE_URL || !process.env.LITELLM_VIRTUAL_KEY) {
     throw new Error(
       "AI Gateway not configured. Set LITELLM_BASE_URL and LITELLM_VIRTUAL_KEY (see litellm-config.yaml)."
