@@ -12,5 +12,5 @@ export async function broadcastBundle(useCaseId: string): Promise<void> {
     include: USE_CASE_INCLUDE,
   });
   if (!row) return;
-  publishUseCaseUpdate({ useCaseId, bundle: toUseCaseBundle(row) });
+  await publishUseCaseUpdate({ useCaseId, bundle: toUseCaseBundle(row) });
 }

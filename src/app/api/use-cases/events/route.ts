@@ -13,8 +13,19 @@ export async function GET(request: Request) {
 
   const stream = new ReadableStream({
     start(controller) {
-      const unsubscribe = subscribeToUseCaseUpdates((event) => {
+      let unsubscribe: (() => void) | null = null;
+      let aborted = false;
+
+      subscribeToUseCaseUpdates((event) => {
         controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+      }).then((unsub) => {
+        // Client may have disconnected while the async Redis subscribe call
+        // was still in flight - tear down immediately rather than leak it.
+        if (aborted) {
+          unsub();
+        } else {
+          unsubscribe = unsub;
+        }
       });
 
       const heartbeat = setInterval(() => {
@@ -22,8 +33,9 @@ export async function GET(request: Request) {
       }, HEARTBEAT_MS);
 
       request.signal.addEventListener("abort", () => {
+        aborted = true;
         clearInterval(heartbeat);
-        unsubscribe();
+        unsubscribe?.();
         controller.close();
       });
     },

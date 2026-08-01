@@ -1,3 +1,4 @@
+import { waitUntil } from "@vercel/functions";
 import { prisma } from "@/lib/prisma";
 import { verifyToken } from "@/lib/webhookAuth";
 import { isGateEligible } from "@/lib/governance";
@@ -123,24 +124,29 @@ export async function POST(request: Request, { params }: { params: Promise<{ use
 
   // Real fire-and-forget: ack now, keep running the step loop in the
   // background. Every step persists through applyStepPatch, which broadcasts
-  // (src/lib/broadcastBundle.ts) after each write - so any open browser tab
-  // shows this run appear and progress live with zero refresh, exactly as if
-  // a human had clicked "Run execution." This relies on the app running as a
-  // persistent Node process (next dev/next start), not a serverless function
-  // that freezes after responding - same class of caveat already documented
-  // for src/lib/eventBus.ts (per-process, not durable across a restart).
-  runStepsInBackground({
-    useCaseId,
-    executionId,
-    masterAgentSummary,
-    useCaseTitle: useCase.title,
-    useCaseDescription: useCase.description,
-    steps,
-  }).catch(() => {
-    // Best-effort: each step's own outcome is already persisted via
-    // applyStepPatch inside the loop below - this only guards against a
-    // truly unexpected throw escaping the whole loop.
-  });
+  // (src/lib/broadcastBundle.ts, real Redis pub/sub) after each write - so
+  // any open browser tab shows this run appear and progress live with zero
+  // refresh, exactly as if a human had clicked "Run execution." waitUntil
+  // (from @vercel/functions) is the officially supported way to keep a
+  // serverless function alive to finish this background work after the
+  // response is already sent - without it, Vercel's runtime could freeze
+  // the function the instant the 202 response returns. Locally (next dev/
+  // next start) waitUntil just runs the promise directly, so this behaves
+  // identically outside Vercel too.
+  waitUntil(
+    runStepsInBackground({
+      useCaseId,
+      executionId,
+      masterAgentSummary,
+      useCaseTitle: useCase.title,
+      useCaseDescription: useCase.description,
+      steps,
+    }).catch(() => {
+      // Best-effort: each step's own outcome is already persisted via
+      // applyStepPatch inside the loop below - this only guards against a
+      // truly unexpected throw escaping the whole loop.
+    })
+  );
 
   return Response.json({ executionId, runNumber, status: "running" }, { status: 202 });
 }
