@@ -63,6 +63,47 @@ interface SystemMetrics {
   };
 }
 
+interface NeonMetrics {
+  configured: boolean;
+  error?: string;
+  databaseSizeBytes: number | null;
+  computeState: string | null;
+  minCu: number | null;
+  maxCu: number | null;
+  autosuspendSeconds: number | null;
+  lastActiveAt: string | null;
+  cpuUsedSec: number | null;
+  activeTimeSeconds: number | null;
+  dataTransferBytes: number | null;
+  writtenDataBytes: number | null;
+}
+
+function formatBytes(bytes: number | null): string {
+  if (bytes === null) return "-";
+  if (bytes < 1024) return `${bytes} B`;
+  const units = ["KB", "MB", "GB", "TB"];
+  let value = bytes;
+  let unitIndex = -1;
+  do {
+    value /= 1024;
+    unitIndex += 1;
+  } while (value >= 1024 && unitIndex < units.length - 1);
+  return `${value.toFixed(value >= 10 ? 0 : 1)} ${units[unitIndex]}`;
+}
+
+function formatDuration(seconds: number | null): string {
+  if (seconds === null) return "-";
+  if (seconds < 60) return `${seconds}s`;
+  if (seconds < 3600) return `${(seconds / 60).toFixed(1)}m`;
+  return `${(seconds / 3600).toFixed(1)}h`;
+}
+
+// ~4GB RAM per CU, matching Neon's own "0.25 CU (~1 GB RAM)" display
+// convention on their real Monitoring page.
+function cuToRamLabel(cu: number): string {
+  return `${cu} CU (~${cu * 4} GB RAM)`;
+}
+
 interface TimeseriesPoint {
   date: string;
   inputTokens: number;
@@ -205,6 +246,7 @@ function ExecutionHistoryRow({ execution }: { execution: PortfolioExecution }) {
 function PortfolioObservability() {
   const [summary, setSummary] = useState<MetricsSummary | null>(null);
   const [system, setSystem] = useState<SystemMetrics | null>(null);
+  const [neon, setNeon] = useState<NeonMetrics | null>(null);
   const [series, setSeries] = useState<TimeseriesPoint[]>([]);
   const [executions, setExecutions] = useState<PortfolioExecution[]>([]);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -213,14 +255,16 @@ function PortfolioObservability() {
   const [range, setRange] = useState<TimeRangeKey>("all");
 
   async function loadAll() {
-    const [summaryRes, systemRes, seriesRes, execRes] = await Promise.all([
+    const [summaryRes, systemRes, neonRes, seriesRes, execRes] = await Promise.all([
       fetch("/api/metrics/summary"),
       fetch("/api/metrics/system"),
+      fetch("/api/metrics/neon"),
       fetch("/api/metrics/timeseries"),
       fetch("/api/metrics/executions"),
     ]);
     if (summaryRes.ok) setSummary(await summaryRes.json());
     if (systemRes.ok) setSystem(await systemRes.json());
+    if (neonRes.ok) setNeon(await neonRes.json());
     if (seriesRes.ok) setSeries((await seriesRes.json()).series);
     if (execRes.ok) setExecutions((await execRes.json()).executions);
   }
@@ -442,6 +486,73 @@ function PortfolioObservability() {
             </tbody>
           </table>
         </div>
+      </div>
+
+      <div className="mt-6 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
+          Neon database &mdash; real, live from the Neon Monitoring API
+        </h3>
+        {!neon || !neon.configured ? (
+          <p className="mt-2 text-sm text-[var(--muted)]">
+            Not configured yet &mdash; add <code className="font-mono">NEON_API_KEY</code> and{" "}
+            <code className="font-mono">NEON_PROJECT_ID</code> to see this project&apos;s real compute state,
+            CU limits, storage, and cumulative usage.
+          </p>
+        ) : neon.error ? (
+          <p className="mt-2 text-sm text-[var(--tier-critical)]">{neon.error}</p>
+        ) : (
+          <div className="mt-3 grid gap-4 sm:grid-cols-[16rem_1fr]">
+            <div className="rounded-lg border border-[var(--border)] bg-[var(--background)] p-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Compute settings</p>
+              <div className="mt-2 space-y-2 text-sm">
+                <div>
+                  <p className="text-xs text-[var(--muted)]">Status</p>
+                  <p className="font-semibold capitalize">
+                    <span
+                      className={`mr-1.5 inline-block h-2 w-2 rounded-full ${
+                        neon.computeState === "active" ? "bg-[var(--status-done)]" : "bg-[var(--muted)]"
+                      }`}
+                    />
+                    {neon.computeState ?? "-"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-[var(--muted)]">Min</p>
+                  <p className="font-semibold">{neon.minCu !== null ? cuToRamLabel(neon.minCu) : "-"}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-[var(--muted)]">Max</p>
+                  <p className="font-semibold">{neon.maxCu !== null ? cuToRamLabel(neon.maxCu) : "-"}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-[var(--muted)]">Autosuspend delay</p>
+                  <p className="font-semibold">
+                    {neon.autosuspendSeconds === 0
+                      ? "5 minutes (default)"
+                      : neon.autosuspendSeconds !== null
+                        ? formatDuration(neon.autosuspendSeconds)
+                        : "-"}
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              <StatTile label="Database size" value={formatBytes(neon.databaseSizeBytes)} />
+              <StatTile label="Cumulative compute time" value={formatDuration(neon.cpuUsedSec)} />
+              <StatTile label="Cumulative active time" value={formatDuration(neon.activeTimeSeconds)} />
+              <StatTile label="Data transferred" value={formatBytes(neon.dataTransferBytes)} />
+              <StatTile label="Data written" value={formatBytes(neon.writtenDataBytes)} />
+              <StatTile
+                label="Last active"
+                value={neon.lastActiveAt ? new Date(neon.lastActiveAt).toLocaleString("en-US") : "-"}
+              />
+            </div>
+          </div>
+        )}
+        <p className="mt-3 text-xs text-[var(--muted)]">
+          Real compute/storage totals from Neon&apos;s public API. Live RAM/CPU percentage time series (like Neon&apos;s
+          own Monitoring page) come from an internal metrics API Neon doesn&apos;t expose publicly - not faked here.
+        </p>
       </div>
 
       <div className="mt-6 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
