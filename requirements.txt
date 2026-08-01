@@ -2,3 +2,13 @@
 # (see .venv-litellm) - used by render.yaml to host the real AI Gateway
 # with a public URL, replacing the local-only .venv-litellm process.
 litellm[proxy]==1.94.1
+
+# litellm[proxy] only requires prisma>=0.11.0,<1.0 (an open range) - a real
+# deploy failure on Render traced to this: pip resolved a newer prisma
+# version there than the 0.15.0 already verified working locally, and that
+# newer version's package no longer exposes `prisma.errors`, which
+# litellm's own DB-exception handler (proxy/db/exception_handler.py)
+# references directly - AttributeError, masking whatever the real
+# underlying DB connection error was. Pinning to the exact working local
+# version avoids the drift.
+prisma==0.15.0
