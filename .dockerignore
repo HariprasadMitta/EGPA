@@ -1,0 +1,11 @@
+# Keeps the Cloud Run source-deploy build context small and fast - only
+# requirements.txt and litellm-config.yaml are actually needed inside the
+# image (see Dockerfile); everything else here is the Next.js app, local
+# Python venv, or generated/local-only state.
+node_modules
+.next
+.git
+.venv-litellm
+.vercel
+*.log
+.env*
