@@ -22,6 +22,7 @@ export async function POST(request: Request) {
   if (!body.step?.name || !body.step?.tool || !body.step?.task || !body.executionId || !body.stepId) {
     return Response.json({ error: "Missing required fields." }, { status: 400 });
   }
+  if (!Array.isArray(body.priorSteps)) body.priorSteps = [];
 
   const run = await prisma.executionRun.findUnique({
     where: { id: body.executionId },

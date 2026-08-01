@@ -14,7 +14,7 @@ export interface PlanInput {
 
 export type PlanEvent =
   | { type: "summary"; text: string }
-  | { type: "step"; name: string; tool: string; task: string }
+  | { type: "step"; name: string; tool: string; task: string; rationale: string }
   | {
       type: "done";
       provider: string;
@@ -34,6 +34,11 @@ function buildSystemPrompt(tools: string[], maxSteps: number): string {
 approved recommendation into ${Math.min(2, maxSteps)}-${maxSteps} concrete sub-agent
 steps. Each step's "tool" field must be one of these available tools: ${tools.join(", ")}.
 
+For each step, also write a "rationale": one concise sentence explaining
+*why* you assigned this specific tool to this specific task, not a generic
+restatement of the task - name the concrete reason this tool (and not
+another one from the available list) is the right fit here.
+
 Respond with ONLY newline-delimited JSON (NDJSON) - one complete, valid
 JSON object per line, no markdown fences, no prose, no surrounding array or
 braces. Every string value MUST be wrapped in double quotes - this is
@@ -41,7 +46,7 @@ plain JSON, not any other format. The first line must be a summary line,
 followed by one line per step, in exactly this format (this example is
 illustrative only, write your own real content specific to this use case):
 {"type":"summary","text":"Classify incoming tickets and route them to the right queue."}
-{"type":"step","name":"Ticket Classifier","tool":"Ticketing system API","task":"Read the incoming ticket and classify its category."}`;
+{"type":"step","name":"Ticket Classifier","tool":"Ticketing system API","task":"Read the incoming ticket and classify its category.","rationale":"Only this tool exposes the raw ticket fields needed to classify category before any other step can act on it."}`;
 }
 
 // Shared by both /api/plan (streams these events to the browser as SSE) and
@@ -82,6 +87,9 @@ ${input.description}`;
           if (typeof parsed.tool !== "string" || !allowedTools.has(parsed.tool)) continue;
           stepCount += 1;
           if (stepCount > MAX_STEPS) continue;
+          if (typeof parsed.rationale !== "string" || !parsed.rationale.trim()) {
+            parsed.rationale = "Not explained by the master agent for this step.";
+          }
         }
         yield parsed as PlanEvent;
       } catch {

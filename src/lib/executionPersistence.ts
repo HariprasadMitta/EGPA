@@ -8,7 +8,7 @@ export interface StartExecutionInput {
   executionId: string;
   runNumber: number;
   masterAgentSummary: string;
-  steps: { id: string; name: string; tool: string; task: string }[];
+  steps: { id: string; name: string; tool: string; task: string; rationale?: string }[];
 }
 
 export type StartExecutionResult =
@@ -69,6 +69,7 @@ export async function startExecutionRun(
           name: s.name,
           tool: s.tool,
           task: s.task,
+          rationale: s.rationale ?? null,
           status: "pending",
         })),
       },

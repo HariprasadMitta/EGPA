@@ -126,6 +126,7 @@ model SubAgentStep {
   name         String
   tool         String
   task         String
+  rationale    String? // real: why the master agent picked this tool for this step - nullable, older rows predate this field
   status       String // SubAgentStepStatus
   output       String?
   provider     String?

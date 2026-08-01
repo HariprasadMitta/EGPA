@@ -175,6 +175,7 @@ export interface SubAgentStep {
   name: string;
   tool: string;
   task: string;
+  rationale: string | null;
   status: SubAgentStepStatus;
   output: string | null;
   provider: string | null;

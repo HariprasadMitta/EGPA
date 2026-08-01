@@ -292,7 +292,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           executionId,
           runNumber,
           masterAgentSummary,
-          steps: steps.map((s) => ({ id: s.id, name: s.name, tool: s.tool, task: s.task })),
+          steps: steps.map((s) => ({ id: s.id, name: s.name, tool: s.tool, task: s.task, rationale: s.rationale })),
         }),
       });
       const data = await res.json();

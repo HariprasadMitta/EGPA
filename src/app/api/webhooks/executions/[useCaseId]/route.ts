@@ -17,6 +17,7 @@ interface StepDraft {
   name: string;
   tool: string;
   task: string;
+  rationale: string;
 }
 
 // Real event triggering: this is the entry point an external caller (curl, a
@@ -73,7 +74,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ use
   // Real planning, consumed fully rather than streamed - nobody's watching a
   // headless trigger, so there's no browser to forward tokens to.
   let masterAgentSummary = "";
-  const rawSteps: { name: string; tool: string; task: string }[] = [];
+  const rawSteps: { name: string; tool: string; task: string; rationale: string }[] = [];
   let planError: string | null = null;
 
   for await (const event of runPlanning({
@@ -85,7 +86,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ use
     harnessPattern: useCase.recommendation.harnessPattern,
   })) {
     if (event.type === "summary") masterAgentSummary = event.text;
-    else if (event.type === "step") rawSteps.push({ name: event.name, tool: event.tool, task: event.task });
+    else if (event.type === "step")
+      rawSteps.push({ name: event.name, tool: event.tool, task: event.task, rationale: event.rationale });
     else if (event.type === "error") planError = event.error;
   }
 
@@ -95,7 +97,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ use
 
   const executionId = makeExecutionId();
   const runNumber = (await prisma.executionRun.count({ where: { useCaseId } })) + 1;
-  const steps: StepDraft[] = rawSteps.map((s, i) => ({ id: `step-${i}`, name: s.name, tool: s.tool, task: s.task }));
+  const steps: StepDraft[] = rawSteps.map((s, i) => ({
+    id: `step-${i}`,
+    name: s.name,
+    tool: s.tool,
+    task: s.task,
+    rationale: s.rationale,
+  }));
 
   const result = await startExecutionRun(useCaseId, {
     executionId,
@@ -146,6 +154,7 @@ async function runStepsInBackground(input: {
   steps: StepDraft[];
 }) {
   const { useCaseId, executionId, masterAgentSummary, useCaseTitle, useCaseDescription, steps } = input;
+  const priorSteps: { name: string; output: string }[] = [];
 
   for (const step of steps) {
     const fresh = await prisma.useCase.findUnique({ where: { id: useCaseId }, select: { killSwitchEngaged: true } });
@@ -176,7 +185,8 @@ async function runStepsInBackground(input: {
         masterAgentSummary,
         executionId,
         stepId: step.id,
-        step: { name: step.name, tool: step.tool, task: step.task },
+        step: { name: step.name, tool: step.tool, task: step.task, rationale: step.rationale },
+        priorSteps,
       })) {
         if (event.type === "done") {
           result = {
@@ -204,5 +214,6 @@ async function runStepsInBackground(input: {
     }
 
     await applyStepPatch(useCaseId, executionId, step.id, { status: "done", ...result });
+    priorSteps.push({ name: step.name, output: result.output });
   }
 }

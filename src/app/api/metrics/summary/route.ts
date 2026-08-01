@@ -29,9 +29,23 @@ export async function GET() {
   let errorStepCount = 0;
   let doneDurationSum = 0;
 
-  const byModel: Record<string, { count: number; inputTokens: number; outputTokens: number; costUsd: number }> = {};
+  const byModel: Record<
+    string,
+    { count: number; inputTokens: number; outputTokens: number; costUsd: number; durationMsSum: number }
+  > = {};
   const byTool: Record<string, number> = {};
   const byRiskTier: Record<string, { executions: number; tokens: number; costUsd: number }> = {};
+
+  // Real RAG metrics parsed from ToolCallLog.result - knowledgeBaseSearch
+  // (src/lib/knowledgeBase.ts) either returns "No relevant documents
+  // found..." (a miss) or one or more real "[relevance 0.87] ..." lines from
+  // an actual Pinecone match (a hit). Parsing the persisted result string
+  // rather than adding a schema field: the relevance score was already real
+  // and already stored, just not surfaced anywhere.
+  let ragSearches = 0;
+  let ragHits = 0;
+  let ragRelevanceSum = 0;
+  let ragRelevanceCount = 0;
 
   for (const run of executions) {
     totalInputTokens += run.totalInputTokens;
@@ -54,20 +68,41 @@ export async function GET() {
         errorStepCount += 1;
       }
       if (step.provider) {
-        byModel[step.provider] ??= { count: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 };
+        byModel[step.provider] ??= { count: 0, inputTokens: 0, outputTokens: 0, costUsd: 0, durationMsSum: 0 };
         byModel[step.provider].count += 1;
         byModel[step.provider].inputTokens += step.inputTokens;
         byModel[step.provider].outputTokens += step.outputTokens;
         byModel[step.provider].costUsd += step.costUsd;
+        byModel[step.provider].durationMsSum += step.durationMs;
       }
     }
 
     for (const log of run.toolCallLogs) {
       byTool[log.toolName] = (byTool[log.toolName] ?? 0) + 1;
+
+      if (log.toolName === "knowledge_base_search") {
+        ragSearches += 1;
+        const isHit = !log.result.startsWith("No relevant documents found");
+        if (isHit) {
+          ragHits += 1;
+          const match = log.result.match(/relevance ([\d.]+)/);
+          if (match) {
+            ragRelevanceSum += Number(match[1]);
+            ragRelevanceCount += 1;
+          }
+        }
+      }
     }
   }
 
   const settledSteps = doneStepCount + errorStepCount;
+
+  const byModelWithAvg = Object.fromEntries(
+    Object.entries(byModel).map(([provider, m]) => [
+      provider,
+      { ...m, avgDurationMs: Math.round(m.durationMsSum / m.count) },
+    ])
+  );
 
   return Response.json({
     totalExecutions: executions.length,
@@ -78,8 +113,15 @@ export async function GET() {
     totalCostUsd,
     successRate: settledSteps > 0 ? doneStepCount / settledSteps : null,
     avgStepDurationMs: doneStepCount > 0 ? Math.round(doneDurationSum / doneStepCount) : 0,
-    byModel,
+    byModel: byModelWithAvg,
     byTool,
     byRiskTier,
+    ragMetrics: {
+      totalSearches: ragSearches,
+      hits: ragHits,
+      misses: ragSearches - ragHits,
+      hitRate: ragSearches > 0 ? ragHits / ragSearches : null,
+      avgTopRelevance: ragRelevanceCount > 0 ? ragRelevanceSum / ragRelevanceCount : null,
+    },
   });
 }

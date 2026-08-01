@@ -109,6 +109,7 @@ export function toSubAgentStep(row: DbSubAgentStep, toolCallCount = 0): SubAgent
     name: row.name,
     tool: row.tool,
     task: row.task,
+    rationale: row.rationale,
     status: row.status as SubAgentStepStatus,
     output: row.output,
     provider: row.provider,

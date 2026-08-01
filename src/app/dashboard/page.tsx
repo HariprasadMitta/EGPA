@@ -6,7 +6,17 @@ import { canAccessDeveloperTools } from "@/lib/roles";
 import { useStore } from "@/lib/store";
 import { useMlOps } from "@/lib/mlops";
 import { RiskBadge } from "@/components/RiskBadge";
-import { HorizontalBarChart, riskTierColor, SparkLineChart, StatTile } from "@/components/charts";
+import {
+  ChartLegend,
+  HorizontalBarChart,
+  riskTierColor,
+  SparkLineChart,
+  StackedAreaChart,
+  StatTile,
+  TimeRangeControls,
+  TimeRangeKey,
+  filterByRange,
+} from "@/components/charts";
 import { ExecutionRun, PingResult, RiskTier, SubAgentStep } from "@/types";
 
 interface MetricsSummary {
@@ -18,14 +28,45 @@ interface MetricsSummary {
   totalCostUsd: number;
   successRate: number | null;
   avgStepDurationMs: number;
-  byModel: Record<string, { count: number; inputTokens: number; outputTokens: number; costUsd: number }>;
+  byModel: Record<
+    string,
+    { count: number; inputTokens: number; outputTokens: number; costUsd: number; avgDurationMs: number }
+  >;
   byTool: Record<string, number>;
   byRiskTier: Record<string, { executions: number; tokens: number; costUsd: number }>;
+  ragMetrics: {
+    totalSearches: number;
+    hits: number;
+    misses: number;
+    hitRate: number | null;
+    avgTopRelevance: number | null;
+  };
+}
+
+interface SystemMetrics {
+  tables: Record<string, number>;
+  governance: {
+    gatesAcknowledged: number;
+    gatesTotal: number;
+    arbApprovals: number;
+    killSwitchesEngaged: number;
+  };
+  webhooks: {
+    configured: number;
+    enabled: number;
+    totalRealTriggers: number;
+    lastTriggeredAt: string | null;
+  };
+  users: {
+    total: number;
+    mostRecentSignupAt: string | null;
+  };
 }
 
 interface TimeseriesPoint {
   date: string;
-  tokens: number;
+  inputTokens: number;
+  outputTokens: number;
   costUsd: number;
   toolCalls: number;
 }
@@ -106,19 +147,34 @@ function ExecutionHistoryRow({ execution }: { execution: PortfolioExecution }) {
       </button>
       {open && (
         <div className="space-y-3 border-t border-[var(--border)] px-4 py-3">
-          {execution.steps.map((step) => (
-            <div key={step.id} className="rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="font-semibold">{step.name}</span>
-                <span className="text-xs text-[var(--muted)]">
-                  {step.provider ?? "-"} &middot; {step.durationMs}ms &middot; ${step.costUsd.toFixed(4)} &middot;{" "}
-                  {step.toolCallCount} tool call{step.toolCallCount === 1 ? "" : "s"}
-                </span>
+          {execution.steps.map((step, i) => {
+            const previous = i > 0 ? execution.steps[i - 1] : null;
+            return (
+              <div key={step.id} className="rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="font-semibold">{step.name}</span>
+                  <span className="text-xs text-[var(--muted)]">
+                    {step.provider ?? "-"} &middot; {step.durationMs}ms &middot; ${step.costUsd.toFixed(4)} &middot;{" "}
+                    {step.toolCallCount} tool call{step.toolCallCount === 1 ? "" : "s"}
+                  </span>
+                </div>
+                <p className="text-xs text-[var(--muted)]">{step.tool} &middot; {step.task}</p>
+                {step.rationale && (
+                  <p className="mt-1.5 text-xs text-[var(--accent)]">
+                    <span className="font-semibold">Why this tool: </span>
+                    {step.rationale}
+                  </p>
+                )}
+                {previous?.output && (
+                  <p className="mt-1.5 text-xs text-[var(--muted)]">
+                    <span className="font-semibold text-[var(--foreground)]">Received from &quot;{previous.name}&quot;: </span>
+                    {previous.output}
+                  </p>
+                )}
+                {step.output && <p className="mt-1 text-xs">{step.output}</p>}
               </div>
-              <p className="text-xs text-[var(--muted)]">{step.tool} &middot; {step.task}</p>
-              {step.output && <p className="mt-1 text-xs">{step.output}</p>}
-            </div>
-          ))}
+            );
+          })}
           {execution.toolCallLogs.length > 0 && (
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
@@ -148,57 +204,82 @@ function ExecutionHistoryRow({ execution }: { execution: PortfolioExecution }) {
 
 function PortfolioObservability() {
   const [summary, setSummary] = useState<MetricsSummary | null>(null);
+  const [system, setSystem] = useState<SystemMetrics | null>(null);
   const [series, setSeries] = useState<TimeseriesPoint[]>([]);
   const [executions, setExecutions] = useState<PortfolioExecution[]>([]);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [range, setRange] = useState<TimeRangeKey>("all");
+
+  async function loadAll() {
+    const [summaryRes, systemRes, seriesRes, execRes] = await Promise.all([
+      fetch("/api/metrics/summary"),
+      fetch("/api/metrics/system"),
+      fetch("/api/metrics/timeseries"),
+      fetch("/api/metrics/executions"),
+    ]);
+    if (summaryRes.ok) setSummary(await summaryRes.json());
+    if (systemRes.ok) setSystem(await systemRes.json());
+    if (seriesRes.ok) setSeries((await seriesRes.json()).series);
+    if (execRes.ok) setExecutions((await execRes.json()).executions);
+  }
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const [summaryRes, seriesRes, execRes] = await Promise.all([
-        fetch("/api/metrics/summary"),
-        fetch("/api/metrics/timeseries"),
-        fetch("/api/metrics/executions"),
-      ]);
-      if (cancelled) return;
-      if (summaryRes.ok) setSummary(await summaryRes.json());
-      if (seriesRes.ok) setSeries((await seriesRes.json()).series);
-      if (execRes.ok) setExecutions((await execRes.json()).executions);
-      setLoading(false);
+      await loadAll();
+      if (!cancelled) setLoading(false);
     })();
     return () => {
       cancelled = true;
     };
   }, []);
 
+  async function handleRefresh() {
+    setRefreshing(true);
+    try {
+      await loadAll();
+    } finally {
+      setRefreshing(false);
+    }
+  }
+
   if (loading) {
     return <p className="mt-8 text-sm text-[var(--muted)]">Loading real cross-portfolio metrics...</p>;
   }
-  if (!summary) {
+  if (!summary || !system) {
     return <p className="mt-8 text-sm text-[var(--muted)]">Could not load portfolio metrics.</p>;
   }
 
-  const modelBars = Object.entries(summary.byModel)
-    .sort(([, a], [, b]) => b.count - a.count)
-    .map(([provider, v]) => ({ label: provider, value: v.count }));
+  const visibleSeries = filterByRange(series, range);
+  const modelRows = Object.entries(summary.byModel).sort(([, a], [, b]) => b.count - a.count);
   const toolBars = Object.entries(summary.byTool)
     .sort(([, a], [, b]) => b - a)
     .map(([tool, count]) => ({ label: tool, value: count }));
   const tierOrder = ["Low", "Medium", "High", "Critical"];
-  const tierBars = tierOrder
+  const tierCostBars = tierOrder
     .filter((t) => summary.byRiskTier[t])
     .map((t) => ({ label: t, value: summary.byRiskTier[t].costUsd }));
+  const tierTokenBars = tierOrder
+    .filter((t) => summary.byRiskTier[t])
+    .map((t) => ({ label: t, value: summary.byRiskTier[t].tokens }));
+  const totalRows = Object.values(system.tables).reduce((sum, n) => sum + n, 0);
 
   return (
     <div className="mt-8">
-      <h2 className="text-lg font-bold text-[var(--brand-strong)]">
-        Portfolio-wide metrics &mdash; every real execution, every use case
-      </h2>
-      <p className="mt-1 text-sm text-[var(--muted)]">
-        Real Prisma aggregates across everything this account can see, same shared visibility as
-        Portfolio &mdash; not just the one use case selected below.
-      </p>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-bold text-[var(--brand-strong)]">
+            Portfolio-wide metrics &mdash; every real execution, every use case
+          </h2>
+          <p className="mt-1 text-sm text-[var(--muted)]">
+            Real Prisma aggregates across everything this account can see, same shared visibility as
+            Portfolio &mdash; not just the one use case selected below.
+          </p>
+        </div>
+        <TimeRangeControls value={range} onChange={setRange} onRefresh={handleRefresh} refreshing={refreshing} />
+      </div>
 
       <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatTile label="Total executions" value={summary.totalExecutions.toLocaleString("en-US")} />
@@ -213,47 +294,67 @@ function PortfolioObservability() {
           label="Success rate"
           value={summary.successRate !== null ? `${(summary.successRate * 100).toFixed(0)}%` : "-"}
           sub="of settled steps"
+          tone={
+            summary.successRate === null
+              ? undefined
+              : summary.successRate >= 0.9
+                ? "good"
+                : summary.successRate >= 0.7
+                  ? "warning"
+                  : "critical"
+          }
         />
         <StatTile
           label="Avg step duration"
           value={summary.avgStepDurationMs > 0 ? `${(summary.avgStepDurationMs / 1000).toFixed(1)}s` : "-"}
         />
+        <StatTile
+          label="Kill-switches engaged"
+          value={system.governance.killSwitchesEngaged.toLocaleString("en-US")}
+          tone={system.governance.killSwitchesEngaged > 0 ? "warning" : "good"}
+        />
       </div>
 
-      {series.length > 0 && (
-        <div className="mt-6 grid gap-4 sm:grid-cols-3">
-          <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Tokens / day</h3>
+      {visibleSeries.length > 0 && (
+        <div className="mt-6 grid gap-4 lg:grid-cols-3">
+          <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 lg:col-span-1">
+            <ChartLegend
+              caption="Tokens"
+              items={[
+                { label: "Input", color: "var(--series-1)" },
+                { label: "Output", color: "var(--series-2)" },
+              ]}
+            />
             <div className="mt-2">
-              <SparkLineChart data={series.map((s) => ({ date: s.date, value: s.tokens }))} color="var(--series-1)" />
+              <StackedAreaChart
+                data={visibleSeries.map((s) => ({ date: s.date, values: { input: s.inputTokens, output: s.outputTokens } }))}
+                seriesKeys={[
+                  { key: "input", label: "Input", color: "var(--series-1)" },
+                  { key: "output", label: "Output", color: "var(--series-2)" },
+                ]}
+              />
             </div>
           </div>
           <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Cost (USD) / day</h3>
+            <ChartLegend caption="Cost (USD)" items={[{ label: "Real spend", color: "var(--series-3)" }]} />
             <div className="mt-2">
               <SparkLineChart
-                data={series.map((s) => ({ date: s.date, value: s.costUsd }))}
-                color="var(--series-2)"
+                data={visibleSeries.map((s) => ({ date: s.date, value: s.costUsd }))}
+                color="var(--series-3)"
                 valueFormatter={(v) => `$${v.toFixed(4)}`}
               />
             </div>
           </div>
           <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Tool calls / day</h3>
+            <ChartLegend caption="Tool calls" items={[{ label: "Knowledge base + others", color: "var(--series-4)" }]} />
             <div className="mt-2">
-              <SparkLineChart data={series.map((s) => ({ date: s.date, value: s.toolCalls }))} color="var(--series-3)" />
+              <SparkLineChart data={visibleSeries.map((s) => ({ date: s.date, value: s.toolCalls }))} color="var(--series-4)" />
             </div>
           </div>
         </div>
       )}
 
-      <div className="mt-6 grid gap-4 sm:grid-cols-3">
-        <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">By model (steps)</h3>
-          <div className="mt-3">
-            <HorizontalBarChart data={modelBars} />
-          </div>
-        </div>
+      <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
           <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">By tool (real calls)</h3>
           <div className="mt-3">
@@ -264,11 +365,158 @@ function PortfolioObservability() {
           <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">By risk tier (cost)</h3>
           <div className="mt-3">
             <HorizontalBarChart
-              data={tierBars}
+              data={tierCostBars}
               valueFormatter={(v) => `$${v.toFixed(4)}`}
               colorFor={(label) => riskTierColor(label)}
             />
           </div>
+        </div>
+        <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">By risk tier (tokens)</h3>
+          <div className="mt-3">
+            <HorizontalBarChart data={tierTokenBars} colorFor={(label) => riskTierColor(label)} />
+          </div>
+        </div>
+        <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">RAG (Pinecone + Cohere)</h3>
+          <div className="mt-3 space-y-2 text-sm">
+            <div className="flex items-center justify-between">
+              <span className="text-[var(--muted)]">Real searches</span>
+              <span className="font-semibold">{summary.ragMetrics.totalSearches}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-[var(--muted)]">Hit rate</span>
+              <span className="font-semibold">
+                {summary.ragMetrics.hitRate !== null ? `${(summary.ragMetrics.hitRate * 100).toFixed(0)}%` : "-"}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-[var(--muted)]">Misses</span>
+              <span className="font-semibold">{summary.ragMetrics.misses}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-[var(--muted)]">Avg top relevance</span>
+              <span className="font-semibold">
+                {summary.ragMetrics.avgTopRelevance !== null ? summary.ragMetrics.avgTopRelevance.toFixed(2) : "-"}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-6 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Model metrics (real, per provider)</h3>
+        <div className="mt-3 overflow-x-auto">
+          <table className="w-full min-w-[36rem] text-left text-xs">
+            <thead>
+              <tr className="border-b border-[var(--border)] text-[var(--muted)]">
+                <th className="py-1.5 pr-3 font-semibold uppercase tracking-wide">Model</th>
+                <th className="py-1.5 pr-3 font-semibold uppercase tracking-wide">Steps</th>
+                <th className="py-1.5 pr-3 font-semibold uppercase tracking-wide">Avg latency</th>
+                <th className="py-1.5 pr-3 font-semibold uppercase tracking-wide">Tokens (in/out)</th>
+                <th className="py-1.5 pr-3 font-semibold uppercase tracking-wide">Total cost</th>
+                <th className="py-1.5 font-semibold uppercase tracking-wide">Avg cost/step</th>
+              </tr>
+            </thead>
+            <tbody>
+              {modelRows.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="py-3 text-[var(--muted)]">
+                    No real steps yet.
+                  </td>
+                </tr>
+              ) : (
+                modelRows.map(([provider, m]) => (
+                  <tr key={provider} className="border-b border-[var(--border)] last:border-0">
+                    <td className="py-1.5 pr-3 font-mono">{provider}</td>
+                    <td className="py-1.5 pr-3">{m.count}</td>
+                    <td className="py-1.5 pr-3">{(m.avgDurationMs / 1000).toFixed(1)}s</td>
+                    <td className="py-1.5 pr-3">
+                      {m.inputTokens.toLocaleString("en-US")} / {m.outputTokens.toLocaleString("en-US")}
+                    </td>
+                    <td className="py-1.5 pr-3">${m.costUsd.toFixed(4)}</td>
+                    <td className="py-1.5">${(m.costUsd / m.count).toFixed(4)}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="mt-6 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
+          Data sources &amp; API endpoints &mdash; real, live from Neon Postgres
+        </h3>
+        <div className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="rounded-lg border border-[var(--border)] bg-[var(--background)] p-3">
+            <p className="text-xs font-semibold">AI Gateway &rarr; LiteLLM &rarr; Anthropic/OpenRouter/Groq/Gemini</p>
+            <p className="mt-1 text-xs text-[var(--muted)]">
+              {(summary.totalSteps + summary.totalExecutions).toLocaleString("en-US")} real LLM calls
+              ({summary.totalExecutions.toLocaleString("en-US")} planning + {summary.totalSteps.toLocaleString("en-US")} sub-agent)
+              across {modelRows.length} provider{modelRows.length === 1 ? "" : "s"}.
+            </p>
+          </div>
+          <div className="rounded-lg border border-[var(--border)] bg-[var(--background)] p-3">
+            <p className="text-xs font-semibold">Knowledge base &rarr; Pinecone + Cohere</p>
+            <p className="mt-1 text-xs text-[var(--muted)]">
+              {summary.ragMetrics.totalSearches.toLocaleString("en-US")} real vector searches,{" "}
+              {summary.ragMetrics.hitRate !== null ? `${(summary.ragMetrics.hitRate * 100).toFixed(0)}% hit rate` : "no calls yet"}.
+            </p>
+          </div>
+          <div className="rounded-lg border border-[var(--border)] bg-[var(--background)] p-3">
+            <p className="text-xs font-semibold">Database &rarr; Neon Postgres</p>
+            <p className="mt-1 text-xs text-[var(--muted)]">
+              {totalRows.toLocaleString("en-US")} real rows across {Object.keys(system.tables).length} tables.
+            </p>
+          </div>
+          <div className="rounded-lg border border-[var(--border)] bg-[var(--background)] p-3">
+            <p className="text-xs font-semibold">Webhook triggers &rarr; external callers</p>
+            <p className="mt-1 text-xs text-[var(--muted)]">
+              {system.webhooks.totalRealTriggers.toLocaleString("en-US")} real triggers &middot;{" "}
+              {system.webhooks.enabled}/{system.webhooks.configured} use cases enabled
+              {system.webhooks.lastTriggeredAt
+                ? ` · last ${new Date(system.webhooks.lastTriggeredAt).toLocaleString("en-US")}`
+                : ""}
+              .
+            </p>
+          </div>
+          <div className="rounded-lg border border-[var(--border)] bg-[var(--background)] p-3">
+            <p className="text-xs font-semibold">Governance &rarr; gate/ARB/kill-switch</p>
+            <p className="mt-1 text-xs text-[var(--muted)]">
+              {system.governance.gatesAcknowledged}/{system.governance.gatesTotal} gates cleared &middot;{" "}
+              {system.governance.arbApprovals} ARB approvals &middot; {system.governance.killSwitchesEngaged} kill-switch(es) currently engaged.
+            </p>
+          </div>
+          <div className="rounded-lg border border-[var(--border)] bg-[var(--background)] p-3">
+            <p className="text-xs font-semibold">Auth.js &rarr; real accounts</p>
+            <p className="mt-1 text-xs text-[var(--muted)]">
+              {system.users.total.toLocaleString("en-US")} real signed-up users
+              {system.users.mostRecentSignupAt
+                ? ` · most recent ${new Date(system.users.mostRecentSignupAt).toLocaleDateString("en-US")}`
+                : ""}
+              .
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-4 overflow-x-auto">
+          <table className="w-full min-w-[28rem] text-left text-xs">
+            <thead>
+              <tr className="border-b border-[var(--border)] text-[var(--muted)]">
+                <th className="py-1.5 pr-3 font-semibold uppercase tracking-wide">Table</th>
+                <th className="py-1.5 font-semibold uppercase tracking-wide">Real row count</th>
+              </tr>
+            </thead>
+            <tbody>
+              {Object.entries(system.tables).map(([table, count]) => (
+                <tr key={table} className="border-b border-[var(--border)] last:border-0">
+                  <td className="py-1.5 pr-3 font-mono">{table}</td>
+                  <td className="py-1.5">{count.toLocaleString("en-US")}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
 
@@ -301,11 +549,15 @@ export default function DashboardPage() {
   const mlops = useMlOps();
   const selected = active ?? bundles[0] ?? null;
 
-  const allSteps: { run: ExecutionRun; step: SubAgentStep }[] = selected
+  const allSteps: { run: ExecutionRun; step: SubAgentStep; previous: SubAgentStep | null }[] = selected
     ? selected.executions.flatMap((run) =>
         run.steps
           .filter((s) => s.status === "done" || s.status === "error")
-          .map((step) => ({ run, step }))
+          .map((step) => ({
+            run,
+            step,
+            previous: run.steps[run.steps.findIndex((s) => s.id === step.id) - 1] ?? null,
+          }))
       )
     : [];
 
@@ -443,7 +695,7 @@ export default function DashboardPage() {
                       Decision trace &mdash; real step history, every execution
                     </h2>
                     <div className="mt-4 max-h-96 space-y-3 overflow-y-auto">
-                      {[...allSteps].reverse().map(({ run, step }) => (
+                      {[...allSteps].reverse().map(({ run, step, previous }) => (
                         <div
                           key={`${run.id}-${step.id}`}
                           className="rounded-md border border-[var(--border)] bg-[var(--background)] px-4 py-3 text-sm"
@@ -460,6 +712,18 @@ export default function DashboardPage() {
                           <p className="text-[var(--muted)]">
                             {step.tool} &middot; {step.task}
                           </p>
+                          {step.rationale && (
+                            <p className="mt-1.5 text-xs text-[var(--accent)]">
+                              <span className="font-semibold">Why this tool: </span>
+                              {step.rationale}
+                            </p>
+                          )}
+                          {previous?.output && (
+                            <p className="mt-1.5 text-xs text-[var(--muted)]">
+                              <span className="font-semibold text-[var(--foreground)]">Received from &quot;{previous.name}&quot;: </span>
+                              {previous.output}
+                            </p>
+                          )}
                           {step.output && <p className="mt-1">{step.output}</p>}
                           <p className="mt-2 text-xs text-[var(--muted)]">
                             {step.provider ?? "-"} &middot; ${step.costUsd.toFixed(4)} &middot;{" "}

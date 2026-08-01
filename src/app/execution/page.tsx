@@ -40,6 +40,7 @@ interface PlanStepDraft {
   name: string;
   tool: string;
   task: string;
+  rationale: string;
 }
 
 function ExecutionCard({
@@ -81,9 +82,10 @@ function ExecutionCard({
       <p className="mt-3 text-sm">{run.masterAgentSummary}</p>
 
       <div className="mt-4 space-y-3">
-        {run.steps.map((step) => {
+        {run.steps.map((step, i) => {
           const streaming = isLive && step.status === "running" ? liveOutput[step.id] : undefined;
           const displayOutput = step.output ?? streaming;
+          const previous = i > 0 ? run.steps[i - 1] : null;
           return (
             <div key={step.id} className="rounded-lg border border-[var(--border)] bg-[var(--background)] p-4">
               <div className="flex items-center gap-3">
@@ -99,6 +101,18 @@ function ExecutionCard({
                   </p>
                 </div>
               </div>
+              {step.rationale && (
+                <p className="mt-2 rounded-md border border-[var(--accent)]/30 bg-[var(--accent)]/5 px-3 py-1.5 text-xs text-[var(--accent)]">
+                  <span className="font-semibold">Why this tool: </span>
+                  {step.rationale}
+                </p>
+              )}
+              {previous?.output && (
+                <p className="mt-2 rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-xs text-[var(--muted)]">
+                  <span className="font-semibold text-[var(--foreground)]">Received from &quot;{previous.name}&quot;: </span>
+                  {previous.output}
+                </p>
+              )}
               {displayOutput && (
                 <p className="mt-3 text-sm leading-relaxed text-[var(--foreground)]">
                   {displayOutput}
@@ -365,6 +379,7 @@ export default function ExecutionPage() {
             name: event.name as string,
             tool: event.tool as string,
             task: event.task as string,
+            rationale: (event.rationale as string) ?? "",
           };
           rawSteps.push(step);
           setPlanningSteps((prev) => [...prev, step]);
@@ -387,6 +402,7 @@ export default function ExecutionPage() {
         name: s.name,
         tool: s.tool,
         task: s.task,
+        rationale: s.rationale || null,
         status: "pending" as SubAgentStepStatus,
         output: null,
         provider: null,
@@ -411,6 +427,8 @@ export default function ExecutionPage() {
         return;
       }
 
+      const priorSteps: { name: string; output: string }[] = [];
+
       for (const step of steps) {
         await updateExecutionStep(useCase.id, executionId, step.id, { status: "running" });
         setLiveOutput((prev) => ({ ...prev, [step.id]: "" }));
@@ -424,7 +442,8 @@ export default function ExecutionPage() {
               masterAgentSummary,
               executionId,
               stepId: step.id,
-              step: { name: step.name, tool: step.tool, task: step.task },
+              step: { name: step.name, tool: step.tool, task: step.task, rationale: step.rationale ?? undefined },
+              priorSteps,
             }),
           });
 
@@ -464,6 +483,7 @@ export default function ExecutionPage() {
             costUsd: finalEvent.costUsd as number,
             durationMs: finalEvent.durationMs as number,
           });
+          priorSteps.push({ name: step.name, output: finalEvent.output as string });
         } catch (err) {
           await updateExecutionStep(useCase.id, executionId, step.id, {
             status: "error",
@@ -540,6 +560,9 @@ export default function ExecutionPage() {
               >
                 <span className="font-semibold">{step.name}</span>
                 <span className="text-[var(--muted)]"> &middot; {step.tool} &middot; {step.task}</span>
+                {step.rationale && (
+                  <p className="mt-1 text-xs text-[var(--accent)]">Why: {step.rationale}</p>
+                )}
               </div>
             ))}
             <span className="status-blink inline-block text-xs text-[var(--muted)]">deciding next step&hellip;</span>

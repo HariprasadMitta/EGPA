@@ -12,7 +12,11 @@ export interface StepInput {
   masterAgentSummary: string;
   executionId: string;
   stepId: string;
-  step: { name: string; tool: string; task: string };
+  step: { name: string; tool: string; task: string; rationale?: string };
+  // Real output from every already-completed step in this run, in order -
+  // genuine inter-step feedback the sub-agent actually reads, not just a
+  // UI display artifact. Empty for the first step.
+  priorSteps: { name: string; output: string }[];
 }
 
 export type StepEvent =
@@ -28,11 +32,19 @@ export type StepEvent =
     }
   | { type: "error"; error: string };
 
-function buildSystemPrompt(step: StepInput["step"]): string {
+function buildSystemPrompt(step: StepInput["step"], hasPriorSteps: boolean): string {
   return `You are the sub-agent "${step.name}", responsible for the tool "${step.tool}"
 within a larger multi-agent execution. Carry out your assigned task and report
 back to the master agent in 2-4 concise sentences: what you did and what you
 found or produced. Be specific and concrete for this use case, not generic.
+${
+  hasPriorSteps
+    ? `Real output from every already-completed step in this run is included below as
+"Prior step output" - actually use it (build on it, reference specific facts
+from it, flag a contradiction if there is one) rather than starting fresh as
+if this were the first step.`
+    : ""
+}
 You have a knowledge_base_search tool available - use it if this task would
 genuinely benefit from citing real policy or reference material, otherwise
 just answer directly. Plain text only - no JSON, no markdown, no preamble
@@ -87,11 +99,17 @@ export function buildGraph(executionId: string, stepId: string) {
 // implementation of the graph invocation and cost accounting.
 export async function* runStep(input: StepInput): AsyncGenerator<StepEvent> {
   const start = Date.now();
+  const priorStepsBlock =
+    input.priorSteps.length > 0
+      ? `\n\nPrior step output (real, from this same run, in order):\n${input.priorSteps
+          .map((s) => `- ${s.name}: ${s.output}`)
+          .join("\n")}`
+      : "";
   const userMessage = `Use case: ${input.useCaseTitle}
 Description: ${input.useCaseDescription}
 Master agent's plan: ${input.masterAgentSummary}
-
-Your task: ${input.step.task}`;
+${input.step.rationale ? `Why this tool was assigned to this step: ${input.step.rationale}` : ""}
+Your task: ${input.step.task}${priorStepsBlock}`;
 
   const { graph, getLastModelName } = buildGraph(input.executionId, input.stepId);
 
@@ -101,7 +119,7 @@ Your task: ${input.step.task}`;
 
   try {
     const events = await graph.stream(
-      { messages: [new SystemMessage(buildSystemPrompt(input.step)), new HumanMessage(userMessage)] },
+      { messages: [new SystemMessage(buildSystemPrompt(input.step, input.priorSteps.length > 0)), new HumanMessage(userMessage)] },
       { streamMode: "messages" }
     );
 

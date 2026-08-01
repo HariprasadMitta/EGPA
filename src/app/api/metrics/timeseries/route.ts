@@ -5,7 +5,8 @@ export const runtime = "nodejs";
 
 interface Bucket {
   date: string;
-  tokens: number;
+  inputTokens: number;
+  outputTokens: number;
   costUsd: number;
   toolCalls: number;
 }
@@ -34,13 +35,14 @@ export async function GET() {
   const buckets: Record<string, Bucket> = {};
   function bucketFor(date: Date): Bucket {
     const key = dayKey(date);
-    buckets[key] ??= { date: key, tokens: 0, costUsd: 0, toolCalls: 0 };
+    buckets[key] ??= { date: key, inputTokens: 0, outputTokens: 0, costUsd: 0, toolCalls: 0 };
     return buckets[key];
   }
 
   for (const run of executions) {
     const b = bucketFor(run.startedAt);
-    b.tokens += run.totalInputTokens + run.totalOutputTokens;
+    b.inputTokens += run.totalInputTokens;
+    b.outputTokens += run.totalOutputTokens;
     b.costUsd += run.totalCostUsd;
   }
   for (const log of toolCalls) {
