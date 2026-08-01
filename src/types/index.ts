@@ -22,6 +22,10 @@ export type IntegrationSurface =
 
 export type ExpectedUsers = "team" | "department" | "org-wide" | "external-public";
 
+export type HumanOversightFrequency = "full-review" | "sampled" | "exception-only";
+
+export type ModelSourcing = "third-party-api" | "in-house-fine-tuned";
+
 export type UseCaseStatus =
   | "draft"
   | "submitted"
@@ -92,6 +96,35 @@ export interface ADR {
   content: string;
 }
 
+export interface RiskComplianceDetails {
+  useCaseId: string;
+  regulatoryFrameworks: string[];
+  dataResidency: string;
+  dataSources: string[];
+  sensitiveDataElements: string;
+  retentionInputsDays: number | null;
+  retentionOutputsDays: number | null;
+  retentionLogsDays: number | null;
+  modelSourcing: ModelSourcing;
+  modelVendor: string;
+  customerImpactDecision: boolean;
+  humanOversightFrequency: HumanOversightFrequency;
+  humanReviewSamplePercent: number | null;
+  escalationOwner: string;
+  explainabilityRequirement: string;
+  biasFairnessTestingPlan: string;
+  preProductionValidation: string;
+  expectedUsageVolume: string;
+  businessCriticality: string;
+  fallbackRollbackPlan: string;
+  encryptedAtRestInTransit: boolean;
+  agentWriteAccessProduction: boolean;
+  securityReviewCompleted: boolean;
+  accountableOwner: string;
+  usersToldAboutAi: boolean;
+  createdAt: string;
+}
+
 export type ModelStatus = "approved" | "deprecated" | "under-review";
 
 export interface MCPServerEntry {
@@ -125,6 +158,7 @@ export interface UseCaseBundle {
   adr: ADR | null;
   executions: ExecutionRun[];
   webhookTrigger: WebhookTriggerInfo | null;
+  riskComplianceDetails: RiskComplianceDetails | null;
 }
 
 export type UserRole = "requester" | "steward" | "governance-owner" | "developer" | "arb" | "admin";

@@ -2,15 +2,27 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useStore } from "@/lib/store";
 import { classifyRisk } from "@/lib/governance";
 import {
   AutonomyLevel,
   DataSensitivity,
   ExpectedUsers,
   IntegrationSurface,
-  Recommendation,
 } from "@/types";
+
+export const INTAKE_DRAFT_KEY = "momentum-intake-draft-v1";
+
+export interface IntakeDraft {
+  title: string;
+  description: string;
+  businessDomain: string;
+  dataSensitivity: DataSensitivity;
+  autonomyLevel: AutonomyLevel;
+  integrationSurface: IntegrationSurface;
+  expectedUsers: ExpectedUsers;
+  owner: string;
+  steward: string;
+}
 
 const DATA_SENSITIVITY_OPTIONS: { value: DataSensitivity; label: string }[] = [
   { value: "public", label: "Public - no restrictions" },
@@ -45,7 +57,6 @@ const EXPECTED_USERS_OPTIONS: { value: ExpectedUsers; label: string }[] = [
 
 export default function IntakePage() {
   const router = useRouter();
-  const { createUseCase, setRecommendation } = useStore();
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -56,24 +67,18 @@ export default function IntakePage() {
   const [expectedUsers, setExpectedUsers] = useState<ExpectedUsers>("team");
   const [owner, setOwner] = useState("");
   const [steward, setSteward] = useState("");
-
-  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [remaining, setRemaining] = useState<number | null>(null);
 
   const previewTier = classifyRisk({ dataSensitivity, autonomyLevel, integrationSurface });
 
-  async function handleSubmit(e: React.FormEvent) {
+  function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!title.trim() || !description.trim() || !owner.trim() || !steward.trim()) {
       setError("Please fill in title, description, owner, and steward.");
       return;
     }
 
-    setSubmitting(true);
-    setError(null);
-
-    const useCase = await createUseCase({
+    const draft: IntakeDraft = {
       title,
       description,
       businessDomain: businessDomain || "Unspecified",
@@ -83,61 +88,18 @@ export default function IntakePage() {
       expectedUsers,
       owner,
       steward,
-      riskTier: previewTier,
-    });
-
-    try {
-      const res = await fetch("/api/recommend", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          title,
-          description,
-          businessDomain,
-          dataSensitivity,
-          autonomyLevel,
-          integrationSurface,
-          expectedUsers,
-        }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        setError(data.error || "Something went wrong generating the recommendation.");
-        setSubmitting(false);
-        return;
-      }
-
-      setRemaining(data.remaining ?? null);
-
-      const recommendation: Recommendation = {
-        useCaseId: useCase.id,
-        framework: data.recommendation.framework,
-        tools: data.recommendation.tools,
-        harnessPattern: data.recommendation.harnessPattern,
-        loopPattern: data.recommendation.loopPattern,
-        iterationCeiling: data.recommendation.iterationCeiling,
-        contextStrategy: data.recommendation.contextStrategy,
-        rationale: data.recommendation.rationale,
-        createdAt: new Date().toISOString(),
-        version: 1,
-      };
-
-      setRecommendation(useCase.id, recommendation);
-      router.push("/recommendation");
-    } catch {
-      setError("Network error calling the recommendation engine. Please try again.");
-      setSubmitting(false);
-    }
+    };
+    window.sessionStorage.setItem(INTAKE_DRAFT_KEY, JSON.stringify(draft));
+    router.push("/intake/risk-profile");
   }
 
   return (
     <div className="mx-auto max-w-3xl px-6 py-12">
       <h1 className="text-2xl font-bold text-[var(--brand-strong)]">Use Case Intake</h1>
       <p className="mt-2 text-[var(--muted)]">
-        Answer the questionnaire and describe your use case in your own words.
-        Risk tier is computed automatically as you fill this in.
+        Step 1 of 2: describe your use case and answer the core questionnaire.
+        A deeper risk &amp; compliance profile follows on the next page before
+        anything is created.
       </p>
 
       <form onSubmit={handleSubmit} className="mt-8 space-y-6">
@@ -256,11 +218,12 @@ export default function IntakePage() {
         <div className="flex items-center justify-between rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
           <div>
             <p className="text-xs uppercase tracking-wide text-[var(--muted)]">
-              Live computed risk tier
+              Preliminary risk tier
             </p>
             <p className="mt-1 text-sm text-[var(--muted)]">
-              Computed from sensitivity &times; autonomy &times; blast radius.
-              This is not user-selectable.
+              Computed from sensitivity &times; autonomy &times; blast radius so far.
+              The next page&apos;s human-oversight and customer-impact questions
+              can raise this further - this is not the final tier.
             </p>
           </div>
           <span className="text-lg font-bold text-[var(--brand-strong)]">
@@ -273,18 +236,12 @@ export default function IntakePage() {
             {error}
           </div>
         )}
-        {remaining !== null && (
-          <p className="text-xs text-[var(--muted)]">
-            {remaining} free live recommendation{remaining === 1 ? "" : "s"} remaining this hour.
-          </p>
-        )}
 
         <button
           type="submit"
-          disabled={submitting}
-          className="w-full rounded-full bg-[var(--brand)] px-6 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[var(--brand-strong)] disabled:cursor-not-allowed disabled:opacity-60"
+          className="w-full rounded-full bg-[var(--brand)] px-6 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[var(--brand-strong)]"
         >
-          {submitting ? "Calling recommendation engine..." : "Get recommendation"}
+          Continue
         </button>
       </form>
     </div>

@@ -28,6 +28,21 @@
   --status-pending-bg: #fef3c7;
   --status-current: #2563eb;
   --status-current-bg: #dbeafe;
+
+  /* Categorical chart palette (Observability) - fixed slot order, never
+     cycled/reassigned by filters. Validated against this app's own
+     --surface via the dataviz skill's validator (all 8 pass on light
+     #ffffff; contrast WARN on 3 slots is mitigated by always showing
+     direct labels, never color alone). */
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --series-4: #eda100;
+  --series-5: #e87ba4;
+  --series-6: #008300;
+  --series-7: #4a3aa7;
+  --series-8: #e34948;
+  --chart-grid: #d7e0ec;
 }
 
 @theme inline {
@@ -64,6 +79,19 @@
     --status-done-bg: #0d2a17;
     --status-pending-bg: #2a1f05;
     --status-current-bg: #0d2247;
+
+    /* Same 8 hues, dark-surface steps - validated against this app's own
+       dark --surface #111a2e via the dataviz skill's validator (all 8
+       clear 3:1 contrast). */
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+    --series-4: #c98500;
+    --series-5: #d55181;
+    --series-6: #008300;
+    --series-7: #9085e9;
+    --series-8: #e66767;
+    --chart-grid: #1f2b45;
   }
 }
 

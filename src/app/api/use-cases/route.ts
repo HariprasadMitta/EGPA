@@ -1,16 +1,45 @@
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { classifyRisk } from "@/lib/governance";
-import { toUseCase, toUseCaseBundle, USE_CASE_INCLUDE } from "@/lib/dbMapping";
+import { toRiskComplianceDetails, toUseCase, toUseCaseBundle, USE_CASE_INCLUDE } from "@/lib/dbMapping";
 import { broadcastBundle } from "@/lib/broadcastBundle";
 import {
   AutonomyLevel,
   DataSensitivity,
   ExpectedUsers,
+  HumanOversightFrequency,
   IntegrationSurface,
+  ModelSourcing,
 } from "@/types";
 
 export const runtime = "nodejs";
+
+interface RiskComplianceDetailsBody {
+  regulatoryFrameworks: string[];
+  dataResidency: string;
+  dataSources: string[];
+  sensitiveDataElements: string;
+  retentionInputsDays: number | null;
+  retentionOutputsDays: number | null;
+  retentionLogsDays: number | null;
+  modelSourcing: ModelSourcing;
+  modelVendor: string;
+  customerImpactDecision: boolean;
+  humanOversightFrequency: HumanOversightFrequency;
+  humanReviewSamplePercent: number | null;
+  escalationOwner: string;
+  explainabilityRequirement: string;
+  biasFairnessTestingPlan: string;
+  preProductionValidation: string;
+  expectedUsageVolume: string;
+  businessCriticality: string;
+  fallbackRollbackPlan: string;
+  encryptedAtRestInTransit: boolean;
+  agentWriteAccessProduction: boolean;
+  securityReviewCompleted: boolean;
+  accountableOwner: string;
+  usersToldAboutAi: boolean;
+}
 
 interface CreateUseCaseBody {
   title: string;
@@ -22,6 +51,7 @@ interface CreateUseCaseBody {
   expectedUsers: ExpectedUsers;
   owner: string;
   steward: string;
+  riskComplianceDetails?: RiskComplianceDetailsBody;
 }
 
 export async function GET() {
@@ -51,10 +81,13 @@ export async function POST(request: Request) {
     return Response.json({ error: "Missing required fields." }, { status: 400 });
   }
 
+  const rcd = body.riskComplianceDetails;
   const riskTier = classifyRisk({
     dataSensitivity: body.dataSensitivity,
     autonomyLevel: body.autonomyLevel,
     integrationSurface: body.integrationSurface,
+    humanOversightFrequency: rcd?.humanOversightFrequency,
+    customerImpactDecision: rcd?.customerImpactDecision,
   });
 
   const id = `uc-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
@@ -73,10 +106,44 @@ export async function POST(request: Request) {
       riskTier,
       status: "submitted",
       ownerUserId: session.user.id,
+      riskComplianceDetails: rcd
+        ? {
+            create: {
+              regulatoryFrameworks: rcd.regulatoryFrameworks,
+              dataResidency: rcd.dataResidency,
+              dataSources: rcd.dataSources,
+              sensitiveDataElements: rcd.sensitiveDataElements,
+              retentionInputsDays: rcd.retentionInputsDays,
+              retentionOutputsDays: rcd.retentionOutputsDays,
+              retentionLogsDays: rcd.retentionLogsDays,
+              modelSourcing: rcd.modelSourcing,
+              modelVendor: rcd.modelVendor,
+              customerImpactDecision: rcd.customerImpactDecision,
+              humanOversightFrequency: rcd.humanOversightFrequency,
+              humanReviewSamplePercent: rcd.humanReviewSamplePercent,
+              escalationOwner: rcd.escalationOwner,
+              explainabilityRequirement: rcd.explainabilityRequirement,
+              biasFairnessTestingPlan: rcd.biasFairnessTestingPlan,
+              preProductionValidation: rcd.preProductionValidation,
+              expectedUsageVolume: rcd.expectedUsageVolume,
+              businessCriticality: rcd.businessCriticality,
+              fallbackRollbackPlan: rcd.fallbackRollbackPlan,
+              encryptedAtRestInTransit: rcd.encryptedAtRestInTransit,
+              agentWriteAccessProduction: rcd.agentWriteAccessProduction,
+              securityReviewCompleted: rcd.securityReviewCompleted,
+              accountableOwner: rcd.accountableOwner,
+              usersToldAboutAi: rcd.usersToldAboutAi,
+            },
+          }
+        : undefined,
     },
+    include: { riskComplianceDetails: true },
   });
 
   await broadcastBundle(id);
 
-  return Response.json({ useCase: toUseCase(row) });
+  return Response.json({
+    useCase: toUseCase(row),
+    riskComplianceDetails: toRiskComplianceDetails(row.riskComplianceDetails),
+  });
 }

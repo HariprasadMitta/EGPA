@@ -3,6 +3,7 @@ import type {
   ExecutionRun as DbExecutionRun,
   GovernanceGate as DbGovernanceGate,
   Recommendation as DbRecommendation,
+  RiskComplianceDetails as DbRiskComplianceDetails,
   SubAgentStep as DbSubAgentStep,
   ToolCallLog as DbToolCallLog,
   UseCase as DbUseCase,
@@ -15,8 +16,11 @@ import {
   ExecutionRun,
   GovernanceGate,
   HitlTier,
+  HumanOversightFrequency,
   IntegrationSurface,
+  ModelSourcing,
   Recommendation,
+  RiskComplianceDetails,
   RiskTier,
   SubAgentStep,
   SubAgentStepStatus,
@@ -32,6 +36,7 @@ type FullUseCase = DbUseCase & {
   adrs: DbAdr[];
   executions: (DbExecutionRun & { steps: DbSubAgentStep[]; toolCallLogs: DbToolCallLog[] })[];
   webhookTrigger: DbWebhookTrigger | null;
+  riskComplianceDetails: DbRiskComplianceDetails | null;
 };
 
 export function toUseCase(row: DbUseCase): UseCase {
@@ -148,6 +153,38 @@ export function toWebhookTriggerInfo(row: DbWebhookTrigger | null): WebhookTrigg
   };
 }
 
+export function toRiskComplianceDetails(row: DbRiskComplianceDetails | null): RiskComplianceDetails | null {
+  if (!row) return null;
+  return {
+    useCaseId: row.useCaseId,
+    regulatoryFrameworks: row.regulatoryFrameworks,
+    dataResidency: row.dataResidency,
+    dataSources: row.dataSources,
+    sensitiveDataElements: row.sensitiveDataElements,
+    retentionInputsDays: row.retentionInputsDays,
+    retentionOutputsDays: row.retentionOutputsDays,
+    retentionLogsDays: row.retentionLogsDays,
+    modelSourcing: row.modelSourcing as ModelSourcing,
+    modelVendor: row.modelVendor,
+    customerImpactDecision: row.customerImpactDecision,
+    humanOversightFrequency: row.humanOversightFrequency as HumanOversightFrequency,
+    humanReviewSamplePercent: row.humanReviewSamplePercent,
+    escalationOwner: row.escalationOwner,
+    explainabilityRequirement: row.explainabilityRequirement,
+    biasFairnessTestingPlan: row.biasFairnessTestingPlan,
+    preProductionValidation: row.preProductionValidation,
+    expectedUsageVolume: row.expectedUsageVolume,
+    businessCriticality: row.businessCriticality,
+    fallbackRollbackPlan: row.fallbackRollbackPlan,
+    encryptedAtRestInTransit: row.encryptedAtRestInTransit,
+    agentWriteAccessProduction: row.agentWriteAccessProduction,
+    securityReviewCompleted: row.securityReviewCompleted,
+    accountableOwner: row.accountableOwner,
+    usersToldAboutAi: row.usersToldAboutAi,
+    createdAt: row.createdAt.toISOString(),
+  };
+}
+
 export function toUseCaseBundle(row: FullUseCase): UseCaseBundle {
   return {
     useCase: toUseCase(row),
@@ -158,6 +195,7 @@ export function toUseCaseBundle(row: FullUseCase): UseCaseBundle {
       .sort((a, b) => a.runNumber - b.runNumber)
       .map(toExecutionRun),
     webhookTrigger: toWebhookTriggerInfo(row.webhookTrigger),
+    riskComplianceDetails: toRiskComplianceDetails(row.riskComplianceDetails),
   };
 }
 
@@ -167,4 +205,5 @@ export const USE_CASE_INCLUDE = {
   adrs: true,
   executions: { include: { steps: true, toolCallLogs: true } },
   webhookTrigger: true,
+  riskComplianceDetails: true,
 } as const;

@@ -146,11 +146,17 @@ export default function LandingPage() {
               Control Plane vs. AI Gateway
             </h3>
             <p className="mt-2 text-sm text-[var(--muted)]">
-              Momentum <strong>is</strong> the Control Plane: risk templates,
-              approval workflows, the model registry, and ADRs. It configures
-              and observes the Gateway &mdash; the data-plane layer that
-              actually routes live agent traffic &mdash; but does not sit in
-              that traffic path itself.
+              Think of it as two layers with two different jobs. Momentum{" "}
+              <strong>is</strong>
+              {" "}the Control Plane: it&apos;s where policy
+              becomes code &mdash; risk templates, approval workflows, the
+              model registry, and ADRs all live here as the single source of
+              truth for what&apos;s allowed to run, for a federated
+              organization that can&apos;t rely on tribal knowledge to enforce
+              that. The Gateway is the separate data-plane layer underneath
+              it &mdash; the thing that actually routes every live LLM call.
+              Momentum configures and observes the Gateway; it doesn&apos;t
+              sit in that traffic path itself.
             </p>
           </div>
           <div>

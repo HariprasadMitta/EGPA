@@ -12,6 +12,7 @@ import { useSession } from "next-auth/react";
 import {
   ExecutionRun,
   Recommendation,
+  RiskComplianceDetails,
   SubAgentStep,
   UseCase,
   UseCaseBundle,
@@ -24,7 +25,8 @@ interface StoreContextValue {
   active: UseCaseBundle | null;
   setActiveId: (id: string) => void;
   createUseCase: (
-    input: Omit<UseCase, "id" | "status" | "createdAt" | "killSwitchEngaged">
+    input: Omit<UseCase, "id" | "status" | "createdAt" | "killSwitchEngaged">,
+    riskComplianceDetails?: Omit<RiskComplianceDetails, "useCaseId" | "createdAt">
   ) => Promise<UseCase>;
   toggleKillSwitch: (useCaseId: string, engaged: boolean) => Promise<void>;
   setRecommendation: (useCaseId: string, recommendation: Recommendation) => Promise<void>;
@@ -119,12 +121,13 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   const createUseCase = useCallback(
     async (
-      input: Omit<UseCase, "id" | "status" | "createdAt" | "killSwitchEngaged">
+      input: Omit<UseCase, "id" | "status" | "createdAt" | "killSwitchEngaged">,
+      riskComplianceDetails?: Omit<RiskComplianceDetails, "useCaseId" | "createdAt">
     ): Promise<UseCase> => {
       const res = await fetch("/api/use-cases", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(input),
+        body: JSON.stringify({ ...input, riskComplianceDetails }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to create use case.");
@@ -138,6 +141,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           adr: null,
           executions: [],
           webhookTrigger: null,
+          riskComplianceDetails: data.riskComplianceDetails ?? null,
         },
       }));
       setActiveId(useCase.id);

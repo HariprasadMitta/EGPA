@@ -27,7 +27,7 @@ async function main() {
   });
 
   for (const bundle of SAMPLE_BUNDLES) {
-    const { useCase, recommendation, gate, adr } = bundle;
+    const { useCase, recommendation, gate, adr, riskComplianceDetails } = bundle;
 
     await prisma.useCase.upsert({
       where: { id: useCase.id },
@@ -97,6 +97,41 @@ async function main() {
           version: adr.version,
           createdAt: new Date(adr.createdAt),
           content: adr.content,
+        },
+      });
+    }
+
+    if (riskComplianceDetails) {
+      await prisma.riskComplianceDetails.upsert({
+        where: { useCaseId: useCase.id },
+        update: {},
+        create: {
+          useCaseId: useCase.id,
+          regulatoryFrameworks: riskComplianceDetails.regulatoryFrameworks,
+          dataResidency: riskComplianceDetails.dataResidency,
+          dataSources: riskComplianceDetails.dataSources,
+          sensitiveDataElements: riskComplianceDetails.sensitiveDataElements,
+          retentionInputsDays: riskComplianceDetails.retentionInputsDays,
+          retentionOutputsDays: riskComplianceDetails.retentionOutputsDays,
+          retentionLogsDays: riskComplianceDetails.retentionLogsDays,
+          modelSourcing: riskComplianceDetails.modelSourcing,
+          modelVendor: riskComplianceDetails.modelVendor,
+          customerImpactDecision: riskComplianceDetails.customerImpactDecision,
+          humanOversightFrequency: riskComplianceDetails.humanOversightFrequency,
+          humanReviewSamplePercent: riskComplianceDetails.humanReviewSamplePercent,
+          escalationOwner: riskComplianceDetails.escalationOwner,
+          explainabilityRequirement: riskComplianceDetails.explainabilityRequirement,
+          biasFairnessTestingPlan: riskComplianceDetails.biasFairnessTestingPlan,
+          preProductionValidation: riskComplianceDetails.preProductionValidation,
+          expectedUsageVolume: riskComplianceDetails.expectedUsageVolume,
+          businessCriticality: riskComplianceDetails.businessCriticality,
+          fallbackRollbackPlan: riskComplianceDetails.fallbackRollbackPlan,
+          encryptedAtRestInTransit: riskComplianceDetails.encryptedAtRestInTransit,
+          agentWriteAccessProduction: riskComplianceDetails.agentWriteAccessProduction,
+          securityReviewCompleted: riskComplianceDetails.securityReviewCompleted,
+          accountableOwner: riskComplianceDetails.accountableOwner,
+          usersToldAboutAi: riskComplianceDetails.usersToldAboutAi,
+          createdAt: new Date(riskComplianceDetails.createdAt),
         },
       });
     }

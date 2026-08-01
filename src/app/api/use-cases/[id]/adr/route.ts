@@ -1,7 +1,7 @@
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { buildADRContent } from "@/lib/adr";
-import { toAdr, toGate, toRecommendation, toUseCase, USE_CASE_INCLUDE } from "@/lib/dbMapping";
+import { toAdr, toGate, toRecommendation, toRiskComplianceDetails, toUseCase, USE_CASE_INCLUDE } from "@/lib/dbMapping";
 import { broadcastBundle } from "@/lib/broadcastBundle";
 
 export const runtime = "nodejs";
@@ -21,7 +21,8 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
   const useCase = toUseCase(row);
   const recommendation = toRecommendation(row.recommendation);
   const gate = toGate(row.gate);
-  const content = buildADRContent(useCase, recommendation, gate, nextVersion);
+  const riskComplianceDetails = toRiskComplianceDetails(row.riskComplianceDetails);
+  const content = buildADRContent(useCase, recommendation, gate, nextVersion, riskComplianceDetails);
 
   const adr = await prisma.adr.create({
     data: { useCaseId: id, version: nextVersion, content },

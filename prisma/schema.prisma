@@ -52,11 +52,12 @@ model UseCase {
   ownerUser   User   @relation(fields: [ownerUserId], references: [id])
   ownerUserId String
 
-  recommendation Recommendation?
-  gate           GovernanceGate?
-  adrs           Adr[]
-  executions     ExecutionRun[]
-  webhookTrigger WebhookTrigger?
+  recommendation         Recommendation?
+  gate                   GovernanceGate?
+  adrs                   Adr[]
+  executions             ExecutionRun[]
+  webhookTrigger         WebhookTrigger?
+  riskComplianceDetails  RiskComplianceDetails?
 }
 
 model Recommendation {
@@ -170,4 +171,49 @@ model ToolCallLog {
 
   executionRun   ExecutionRun @relation(fields: [executionRunId], references: [id])
   executionRunId String
+}
+
+// Deeper intake questionnaire (second Intake page) - real risk/compliance
+// due-diligence fields, captured once per UseCase. Two fields here
+// (humanOversightFrequency, customerImpactDecision) feed classifyRisk() as
+// real weighted scoring inputs; the rest are captured and surfaced (ADR,
+// Guide) as real governance documentation without being force-fit into the
+// numeric score.
+model RiskComplianceDetails {
+  useCaseId String @id
+
+  regulatoryFrameworks String[] // POPIA, FSCA Conduct Standards, FICA, GDPR, SARB/Basel
+  dataResidency        String
+  dataSources          String[] // internal | third-party-feed | customer-submitted
+  sensitiveDataElements String
+
+  retentionInputsDays  Int?
+  retentionOutputsDays Int?
+  retentionLogsDays    Int?
+
+  modelSourcing String // "third-party-api" | "in-house-fine-tuned" - captured, never a risk multiplier
+  modelVendor   String
+
+  customerImpactDecision   Boolean // real scoring input
+  humanOversightFrequency  String // "full-review" | "sampled" | "exception-only" - real scoring input
+  humanReviewSamplePercent Int?
+  escalationOwner          String
+
+  explainabilityRequirement String
+  biasFairnessTestingPlan   String
+  preProductionValidation   String
+  expectedUsageVolume       String
+  businessCriticality       String
+  fallbackRollbackPlan      String
+
+  encryptedAtRestInTransit   Boolean @default(false)
+  agentWriteAccessProduction Boolean @default(false)
+  securityReviewCompleted    Boolean @default(false)
+
+  accountableOwner  String
+  usersToldAboutAi  Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  useCase UseCase @relation(fields: [useCaseId], references: [id])
 }

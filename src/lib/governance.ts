@@ -2,6 +2,7 @@ import {
   AutonomyLevel,
   DataSensitivity,
   GovernanceTemplate,
+  HumanOversightFrequency,
   IntegrationSurface,
   RiskTier,
 } from "@/types";
@@ -36,25 +37,50 @@ const BLAST_RADIUS_SCORE: Record<IntegrationSurface, number> = {
   "external-financial-or-safety": 3,
 };
 
+// Same spirit as AUTONOMY_SCORE - "exception-only" review scores like the
+// least-supervised autonomy option ("fully-autonomous") does today, since
+// asking how often a human actually looks at output is closely related to
+// asking how autonomous the agent is.
+const HUMAN_OVERSIGHT_SCORE: Record<HumanOversightFrequency, number> = {
+  "full-review": 0,
+  sampled: 1.5,
+  "exception-only": 3,
+};
+
+// Same scale as the top BLAST_RADIUS_SCORE value - a use case that directly
+// makes/influences a customer decision (credit, claims, pricing) is asking a
+// closely related real question to "external-financial-or-safety" more
+// directly, so it's weighted the same.
+const CUSTOMER_IMPACT_SCORE = 3;
+
 /**
  * Deterministic OSCAR "Classification" scoring: data sensitivity x agent
- * autonomy x blast radius. Weighted so autonomy and blast radius dominate a
- * single high sensitivity score, matching the spec's "computed, not selected"
- * requirement.
+ * autonomy x blast radius, plus (once the deeper Intake questionnaire has
+ * been answered) human oversight frequency and customer-impact decision -
+ * two more genuinely risk-correlated inputs, weighted the same as the
+ * existing inputs they most closely mirror. Fields like "which vendor" or
+ * "retention period" are real governance facts worth capturing (see
+ * RiskComplianceDetails) but aren't themselves risk signals, so they don't
+ * feed this score - unanswered/undefined inputs here score 0, the safest
+ * assumption, not a penalty.
  */
 export function classifyRisk(input: {
   dataSensitivity: DataSensitivity;
   autonomyLevel: AutonomyLevel;
   integrationSurface: IntegrationSurface;
+  humanOversightFrequency?: HumanOversightFrequency;
+  customerImpactDecision?: boolean;
 }): RiskTier {
   const score =
     SENSITIVITY_SCORE[input.dataSensitivity] * 1 +
     AUTONOMY_SCORE[input.autonomyLevel] * 1.5 +
-    BLAST_RADIUS_SCORE[input.integrationSurface] * 1.5;
+    BLAST_RADIUS_SCORE[input.integrationSurface] * 1.5 +
+    (input.humanOversightFrequency ? HUMAN_OVERSIGHT_SCORE[input.humanOversightFrequency] : 0) * 1.5 +
+    (input.customerImpactDecision ? CUSTOMER_IMPACT_SCORE : 0) * 1.5;
 
-  if (score >= 10) return "Critical";
-  if (score >= 6.5) return "High";
-  if (score >= 3) return "Medium";
+  if (score >= 17) return "Critical";
+  if (score >= 11) return "High";
+  if (score >= 5) return "Medium";
   return "Low";
 }
 

@@ -17,7 +17,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Momentum AI CV - Centralized View",
+  title: "Momentum-LOC AI CV - Centralized View",
   description:
     "Submit an AI/agentic use case and get a governed, explainable architecture recommendation, then execute and monitor it from one centralized view.",
 };

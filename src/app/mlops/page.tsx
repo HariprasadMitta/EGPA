@@ -414,8 +414,12 @@ export default function MlOpsPage() {
           RAG demo
         </h2>
         <p className="mt-1 text-xs text-[var(--muted)]">
-          Real embeddings ({HUGGINGFACE_EMBEDDING_MODEL.label}) and real cosine-similarity retrieval -
-          stored for this browser session only, not shared across devices.
+          Connecting Hugging Face above is what supplies the real embedding model
+          ({HUGGINGFACE_EMBEDDING_MODEL.label}) these ingest/query calls actually run against - text you
+          paste below is really chunked and embedded, then retrieved by real cosine similarity, not
+          keyword matching. &quot;Session only&quot; is literal: the embedded chunks live in this
+          browser tab&apos;s memory and are gone on reload - unlike everything else in this app since
+          the database landed, nothing here is written to Postgres.
         </p>
 
         {!mlops.huggingFace.connected ? (

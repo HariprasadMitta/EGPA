@@ -1,5 +1,5 @@
 import { GOVERNANCE_TEMPLATES, classifyRisk } from "@/lib/governance";
-import { ADR, GovernanceGate, Recommendation, UseCase, UseCaseBundle } from "@/types";
+import { ADR, GovernanceGate, Recommendation, RiskComplianceDetails, UseCase, UseCaseBundle } from "@/types";
 import { buildADRContent } from "@/lib/adr";
 
 function makeBundle(params: {
@@ -16,11 +16,14 @@ function makeBundle(params: {
   createdAt: string;
   recommendation: Omit<Recommendation, "useCaseId" | "createdAt" | "version">;
   acknowledged: boolean;
+  riskComplianceDetails: Omit<RiskComplianceDetails, "useCaseId" | "createdAt">;
 }): UseCaseBundle {
   const riskTier = classifyRisk({
     dataSensitivity: params.dataSensitivity,
     autonomyLevel: params.autonomyLevel,
     integrationSurface: params.integrationSurface,
+    humanOversightFrequency: params.riskComplianceDetails.humanOversightFrequency,
+    customerImpactDecision: params.riskComplianceDetails.customerImpactDecision,
   });
   const template = GOVERNANCE_TEMPLATES[riskTier];
 
@@ -62,6 +65,12 @@ function makeBundle(params: {
     arbApprovedAt: params.acknowledged && template.requiresArbApproval ? params.createdAt : null,
   };
 
+  const riskComplianceDetails: RiskComplianceDetails = {
+    ...params.riskComplianceDetails,
+    useCaseId: params.id,
+    createdAt: params.createdAt,
+  };
+
   // Only bake an ADR for samples that already cleared their gate. An
   // unacknowledged sample must generate its ADR fresh once a visitor
   // actually completes the checklist, so it reflects that acknowledgment -
@@ -72,11 +81,11 @@ function makeBundle(params: {
         useCaseId: params.id,
         version: 1,
         createdAt: params.createdAt,
-        content: buildADRContent(useCase, recommendation, gate, 1),
+        content: buildADRContent(useCase, recommendation, gate, 1, riskComplianceDetails),
       }
     : null;
 
-  return { useCase, recommendation, gate, adr, executions: [], webhookTrigger: null };
+  return { useCase, recommendation, gate, adr, executions: [], webhookTrigger: null, riskComplianceDetails };
 }
 
 export const SAMPLE_BUNDLES: UseCaseBundle[] = [
@@ -110,6 +119,32 @@ export const SAMPLE_BUNDLES: UseCaseBundle[] = [
       rationale:
         "Medium risk tier permits a supervised multi-step pipeline, but confidential customer data means each drafted response still needs a human check before it goes out. LangGraph's explicit state graph makes the classify -> draft -> route flow auditable, and a worker-per-channel pattern keeps the email/chat/form parsers isolated from the routing logic.",
     },
+    riskComplianceDetails: {
+      regulatoryFrameworks: ["POPIA", "FSCA Conduct Standards"],
+      dataResidency: "South Africa",
+      dataSources: ["internal", "customer-submitted"],
+      sensitiveDataElements: "Customer names, contact details, complaint free-text (may reference account numbers)",
+      retentionInputsDays: 365,
+      retentionOutputsDays: 365,
+      retentionLogsDays: 730,
+      modelSourcing: "third-party-api",
+      modelVendor: "Anthropic (via the AI Gateway)",
+      customerImpactDecision: false,
+      humanOversightFrequency: "full-review",
+      humanReviewSamplePercent: 100,
+      escalationOwner: "Priya Nandakumar (Customer Care Ops Lead)",
+      explainabilityRequirement: "Drafted response must cite the complaint text it responded to - no black-box scoring surfaced to the customer",
+      biasFairnessTestingPlan: "Quarterly sample review for tone/severity-classification consistency across complaint channels",
+      preProductionValidation: "100 historical complaints replayed against the draft-response step, checked against the actual outcome",
+      expectedUsageVolume: "~400 complaints/week",
+      businessCriticality: "Business-important - delays degrade customer care SLAs but no safety impact",
+      fallbackRollbackPlan: "Revert to the manual triage queue - agent output is advisory until a human sends it",
+      encryptedAtRestInTransit: true,
+      agentWriteAccessProduction: true,
+      securityReviewCompleted: true,
+      accountableOwner: "Priya Nandakumar (Customer Care Ops Lead)",
+      usersToldAboutAi: true,
+    },
   }),
   makeBundle({
     id: "sample-network-ticket",
@@ -141,6 +176,32 @@ export const SAMPLE_BUNDLES: UseCaseBundle[] = [
       rationale:
         "The combination of fully-autonomous intent and a safety-adjacent blast radius (network changes across business units) computes to Critical, so the harness must hard-block autonomous writes behind a manual approval gate regardless of the model's own confidence. A tight iteration ceiling limits runaway correlation loops on ambiguous tickets.",
     },
+    riskComplianceDetails: {
+      regulatoryFrameworks: ["FSCA Conduct Standards", "SARB/Basel"],
+      dataResidency: "South Africa, federated across regional business units",
+      dataSources: ["internal"],
+      sensitiveDataElements: "Network topology data, incident timestamps, regional infrastructure identifiers",
+      retentionInputsDays: 180,
+      retentionOutputsDays: 365,
+      retentionLogsDays: 1095,
+      modelSourcing: "third-party-api",
+      modelVendor: "OpenRouter (via the AI Gateway, multi-provider fallback)",
+      customerImpactDecision: true,
+      humanOversightFrequency: "exception-only",
+      humanReviewSamplePercent: null,
+      escalationOwner: "Diego Alves (NetOps Director)",
+      explainabilityRequirement: "Every auto-opened change ticket must cite the matched outage pattern and confidence score",
+      biasFairnessTestingPlan: "Not yet completed - a blocking item before this use case can clear governance sign-off",
+      preProductionValidation: "Not yet completed - a blocking item before this use case can clear governance sign-off",
+      expectedUsageVolume: "~1,200 tickets/week across all regional business units",
+      businessCriticality: "Safety-adjacent - an unreviewed autonomous network change can cause a wider outage",
+      fallbackRollbackPlan: "Kill-switch halts the next execution step server-side; opened change tickets still require the existing change-management approval before taking effect",
+      encryptedAtRestInTransit: true,
+      agentWriteAccessProduction: true,
+      securityReviewCompleted: false,
+      accountableOwner: "Fatima Al-Sayed (Platform Architect)",
+      usersToldAboutAi: false,
+    },
   }),
   makeBundle({
     id: "sample-expense-anomaly",
@@ -170,6 +231,32 @@ export const SAMPLE_BUNDLES: UseCaseBundle[] = [
       contextStrategy: "Full context, no compaction needed",
       rationale:
         "Suggest-only autonomy against read-only internal data computes to Low risk, so a lightweight single-agent loop is appropriate. Because the agent never writes back to the expense system, iteration ceiling can be generous without materially increasing blast radius.",
+    },
+    riskComplianceDetails: {
+      regulatoryFrameworks: [],
+      dataResidency: "South Africa",
+      dataSources: ["internal"],
+      sensitiveDataElements: "Employee expense line items, merchant names, amounts - no card numbers or bank details",
+      retentionInputsDays: 90,
+      retentionOutputsDays: 90,
+      retentionLogsDays: 365,
+      modelSourcing: "third-party-api",
+      modelVendor: "Groq (via the AI Gateway)",
+      customerImpactDecision: false,
+      humanOversightFrequency: "full-review",
+      humanReviewSamplePercent: 100,
+      escalationOwner: "Helen Osei (Finance Controller)",
+      explainabilityRequirement: "Flag must state which peer-group baseline and which specific line items triggered it",
+      biasFairnessTestingPlan: "Peer groups reviewed annually for size/composition bias",
+      preProductionValidation: "Backtested against 6 months of historical expense data with known-anomaly labels",
+      expectedUsageVolume: "~150 expense reports/week",
+      businessCriticality: "Low - advisory only, the finance reviewer makes every real decision",
+      fallbackRollbackPlan: "Disable the flag and revert to unassisted manual review - no dependency created",
+      encryptedAtRestInTransit: true,
+      agentWriteAccessProduction: false,
+      securityReviewCompleted: true,
+      accountableOwner: "Helen Osei (Finance Controller)",
+      usersToldAboutAi: true,
     },
   }),
 ];

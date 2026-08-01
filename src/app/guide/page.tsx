@@ -84,7 +84,7 @@ const ROADMAP: RoadmapStep[] = [
     n: 1,
     title: "Intake",
     description:
-      "Fill in the title, description, owner, and steward, then choose the 4 questionnaire options (data sensitivity, autonomy level, integration surface, expected users) - the \"Live computed risk tier\" box updates as you go, so you see the consequence of each choice before you submit. Click \"Get recommendation\" to create the real use case and call the recommendation engine.",
+      "Two steps. First, fill in the title, description, owner, and steward, then choose the 4 core questionnaire options (data sensitivity, autonomy level, integration surface, expected users) - a preliminary risk tier updates as you go - and click \"Continue.\" Second, the Risk & Compliance Profile page: a deeper due-diligence questionnaire where two answers (human oversight frequency, customer-impact decision) visibly move the live risk tier via a gauge, before \"Get recommendation\" creates the real use case and calls the recommendation engine.",
     role: ROLE_LABELS.requester,
     href: "/intake",
   },
@@ -100,7 +100,7 @@ const ROADMAP: RoadmapStep[] = [
     n: 3,
     title: "Governance Gate",
     description:
-      "Check off every required control for this risk tier - all of them, not a subset, before \"Proceed to ADR\" unlocks. Critical-tier use cases also need a named ARB member to click \"Approve as {name}\" here - no one else can clear that specific box. A Governance Owner or Admin can also engage the kill-switch here at any time, real and enforced (Phase 7): flipping it blocks the next in-progress execution step server-side, not just in the UI.",
+      "Check off every required control for this risk tier - all of them, not a subset, before \"Proceed to ADR\" unlocks. Critical-tier use cases also need a named ARB member to click \"Approve as {name}\" here - no one else can clear that specific box. A Governance Owner or Admin can also engage the kill-switch here at any time, real and enforced: flipping it blocks the next in-progress execution step server-side, not just in the UI.",
     role: ROLE_LABELS["governance-owner"],
     href: "/gate",
   },
@@ -116,7 +116,7 @@ const ROADMAP: RoadmapStep[] = [
     n: 5,
     title: "Execution",
     description:
-      "Developer/Admin-only. Click \"Run execution\" to watch a real master agent plan the steps, then real sub-agent LLM calls execute each one live (tokens streaming in as they're generated, real tool calls, real cost). The Automation trigger panel here lets you generate a real webhook token (Phase 8) so an execution can start from a curl call or a real cron service instead of a click.",
+      "Developer/Admin-only. Click \"Run execution\" to watch a real master agent plan the steps, then real sub-agent LLM calls execute each one live (tokens streaming in as they're generated, real tool calls, real cost). The Automation trigger panel here lets you generate a real webhook token so an execution can start from a curl call or a real cron service instead of a click - the same real event triggering an interviewer would expect of an agent that's an actual product, not a demo.",
     role: ROLE_LABELS.developer,
     href: "/execution",
   },
@@ -124,7 +124,7 @@ const ROADMAP: RoadmapStep[] = [
     n: 6,
     title: "Observability",
     description:
-      "Real token/cost/duration usage and a real step-by-step decision trace from every execution this use case has run, all in one dashboard - nothing simulated. Also shows your Model Builder connection status if you're a Developer/Admin.",
+      "Portfolio-wide stat tiles, real time-series and by-model/by-tool/by-risk-tier charts, and an expandable execution history across every use case, plus this one use case's own token/cost/duration usage and step-by-step decision trace - nothing simulated. This is the real answer to \"is this agent costing more than the person doing the work\" - actual cost trends, not a guess. Also shows your Model Builder connection status if you're a Developer/Admin.",
     role: "All roles",
     href: "/dashboard",
   },
@@ -189,7 +189,7 @@ const BEYOND_PIPELINE: BeyondPageGuide[] = [
     href: "/registry",
     access: "Signed in",
     description:
-      "A searchable, filterable catalog of models and MCP servers with their approval status and which risk tiers they're allowed for. Seeded sample data today - in a connected deployment this would sync live from the AI Gateway's model allowlist.",
+      "The single source of truth for what's allowed to run: a searchable, filterable catalog of models and MCP servers with their approval status and which risk tiers they're allowed for - the answer to \"visualize the shadow AI running around this org\" instead of guessing. Seeded sample data today - in a connected deployment this would sync live from the AI Gateway's model allowlist.",
   },
   {
     title: "Model Builder",
@@ -213,7 +213,7 @@ const CONCEPTS: ConceptGuide[] = [
     title: "Risk tier scoring (OSCAR)",
     tag: "Computed, not chosen",
     description:
-      "Every use case's risk tier (Low/Medium/High/Critical) is computed from your Intake answers - data sensitivity x autonomy level x integration surface - never picked directly. Higher tiers require more approvals, more controls, and a tighter iteration ceiling.",
+      "Every use case's risk tier (Low/Medium/High/Critical) is computed from your Intake answers - data sensitivity x autonomy level x integration surface, plus (once the deeper risk profile is answered) human oversight frequency and whether the agent directly influences a customer decision. Policy as code: the rule lives in one function, not a reviewer's judgment call, so it's applied the same way every time.",
     href: "/intake",
     linkLabel: "See it compute live on Intake",
   },
@@ -234,8 +234,16 @@ const CONCEPTS: ConceptGuide[] = [
     linkLabel: "See it on the Governance Gate",
   },
   {
+    title: "Tool allowlist enforcement",
+    tag: "Real, enforced at runtime",
+    description:
+      "This is the concrete version of \"the agent may have access to everything, so we need tagging that says it's only allowed to read this\": every planned step's tool is checked against the recommendation's approved tool stack, both when the plan is parsed and again when it's persisted. An unlisted tool name is dropped or the whole plan is rejected - not silently trusted.",
+    href: "/execution",
+    linkLabel: "See it on Execution",
+  },
+  {
     title: "Kill-switch",
-    tag: "Real - Phase 7",
+    tag: "Real, enforced at runtime",
     description:
       "A Governance Owner or Admin can engage this on any use case at any time. It's enforced server-side at the moment the next execution step would run, not just a UI flag - flip it mid-run and the next step genuinely fails to persist.",
     href: "/gate",
@@ -243,7 +251,7 @@ const CONCEPTS: ConceptGuide[] = [
   },
   {
     title: "Automation trigger (webhook)",
-    tag: "Real - Phase 8",
+    tag: "Real event triggering",
     description:
       "A Developer/Admin can generate a real bearer token scoped to one use case, then start a real execution from outside the browser - curl, a real cron service, GitHub Actions - with zero human clicking \"Run execution.\" Same governance checks apply either way.",
     href: "/execution",
@@ -251,9 +259,9 @@ const CONCEPTS: ConceptGuide[] = [
   },
   {
     title: "AI Gateway",
-    tag: "Real, local-only - Phase 10",
+    tag: "Real, local-only",
     description:
-      "A self-hosted LiteLLM Proxy sits in front of every real LLM call this app makes, holding the actual provider keys so the app only ever holds one scoped virtual key. It picks up automatic fallback between providers if one fails - the app itself no longer decides that.",
+      "A self-hosted LiteLLM Proxy sits in front of every real LLM call this app makes, covering the layers a real gateway is expected to own: API management (one endpoint, one virtual key), integration (every provider behind it), model serving and automatic fallback if one fails, and an audit trail feeding this app's own observability and data-governance/security layers. The app itself no longer picks a provider - it holds one scoped virtual key, never the real provider keys.",
     href: "/",
     linkLabel: "See the Control Plane vs. Gateway framing on the landing page",
   },
@@ -463,7 +471,8 @@ export default function GuidePage() {
       <p className="mt-2 max-w-2xl text-[var(--muted)]">
         The one-stop reference: who this is for, what every page and button
         actually does, and the vocabulary the recommendation engine draws
-        from.
+        from. Built for an organization with federated business units - every
+        use case is shared across reviewers, not siloed to whoever created it.
       </p>
 
       <nav className="sticky top-0 z-10 mt-6 flex flex-wrap gap-2 border-y border-[var(--border)] bg-[var(--background)]/95 py-3 backdrop-blur">
