@@ -34,3 +34,10 @@ export function canApproveArb(role: UserRole): boolean {
 export function canToggleKillSwitch(role: UserRole): boolean {
   return role === "governance-owner" || role === "admin";
 }
+
+// Real oversight roles need to see every business unit's use cases within
+// their organization; regular contributors are scoped to their own unit
+// (see GET /api/use-cases).
+export function canSeeAllUseCases(role: UserRole): boolean {
+  return role === "governance-owner" || role === "arb" || role === "admin";
+}

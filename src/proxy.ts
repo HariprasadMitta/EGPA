@@ -17,6 +17,7 @@ const PROTECTED_PREFIXES = [
   "/gate",
   "/adr",
   "/portfolio",
+  "/admin",
 ];
 
 export const proxy = auth((req) => {
@@ -35,5 +36,6 @@ export const config = {
     "/gate/:path*",
     "/adr/:path*",
     "/portfolio/:path*",
+    "/admin/:path*",
   ],
 };

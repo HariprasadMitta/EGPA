@@ -1,11 +1,15 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 import { canApproveArb, canToggleKillSwitch } from "@/lib/roles";
 import { useStore } from "@/lib/store";
 import { RiskBadge } from "@/components/RiskBadge";
+import { PresenceIndicator } from "@/components/PresenceIndicator";
+import { GOVERNANCE_TEMPLATES } from "@/lib/governance";
+import { AuditLogEntry, Comment } from "@/types";
 
 const HITL_DESCRIPTIONS: Record<string, string> = {
   none: "No human-in-the-loop step required.",
@@ -13,6 +17,177 @@ const HITL_DESCRIPTIONS: Record<string, string> = {
   "approval-required": "A named approver must sign off before the agent proceeds.",
   manual: "Every action requires manual human execution or confirmation.",
 };
+
+const AUDIT_ACTION_LABELS: Record<string, string> = {
+  kill_switch_engaged: "engaged the kill switch",
+  kill_switch_disengaged: "disengaged the kill switch",
+  control_acknowledged: "acknowledged a control",
+  control_unacknowledged: "un-acknowledged a control",
+  gate_finalized: "finalized the governance gate",
+  arb_approved: "approved as ARB",
+  drift_detected: "real drift detected (system)",
+  anomaly_detected: "real anomaly detected (system)",
+  comment_added: "added a comment",
+};
+
+function RecertificationBanner({ riskTier, acknowledgedAt }: { riskTier: string; acknowledgedAt: string | null }) {
+  const days = GOVERNANCE_TEMPLATES[riskTier as keyof typeof GOVERNANCE_TEMPLATES]?.recertificationDays;
+  // "Now" is real wall-clock time, not derivable during render (impure) -
+  // computed once on mount, same class of client-only value as every other
+  // post-mount hydration read in this app (see store.tsx's activeId).
+  const [now, setNow] = useState<number | null>(null);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setNow(Date.now());
+  }, []);
+
+  if (!acknowledgedAt || !days || now === null) return null;
+
+  const dueDate = new Date(new Date(acknowledgedAt).getTime() + days * 24 * 60 * 60 * 1000);
+  const daysLeft = Math.ceil((dueDate.getTime() - now) / (24 * 60 * 60 * 1000));
+  const overdue = daysLeft < 0;
+  const dueSoon = daysLeft >= 0 && daysLeft <= 14;
+
+  if (!overdue && !dueSoon) return null;
+
+  return (
+    <div
+      className={`mt-6 rounded-md border px-4 py-3 text-sm ${
+        overdue
+          ? "border-[var(--tier-critical)]/30 bg-[var(--tier-critical-bg)] text-[var(--tier-critical)]"
+          : "border-[var(--tier-medium)]/30 bg-[var(--tier-medium-bg)] text-[var(--tier-medium)]"
+      }`}
+    >
+      <span className="font-semibold">
+        {overdue ? "Recertification overdue" : "Recertification due soon"}
+      </span>{" "}
+      &mdash; this {riskTier}-tier use case&apos;s governance sign-off was acknowledged on{" "}
+      {new Date(acknowledgedAt).toLocaleDateString("en-US")} and is real-cycled every {days} days. Due{" "}
+      {overdue ? `${Math.abs(daysLeft)} day${Math.abs(daysLeft) === 1 ? "" : "s"} ago` : `in ${daysLeft} day${daysLeft === 1 ? "" : "s"}`}
+      {" "}({dueDate.toLocaleDateString("en-US")}).
+    </div>
+  );
+}
+
+function GovernanceHistoryPanel({ useCaseId }: { useCaseId: string }) {
+  const [entries, setEntries] = useState<AuditLogEntry[]>([]);
+  const [open, setOpen] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    if (!open || loaded) return;
+    fetch(`/api/use-cases/${useCaseId}/audit-log`)
+      .then((r) => r.json())
+      .then((d) => {
+        setEntries(d.entries ?? []);
+        setLoaded(true);
+      });
+  }, [open, loaded, useCaseId]);
+
+  return (
+    <div className="mt-6 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6">
+      <button type="button" onClick={() => setOpen((v) => !v)} className="flex w-full items-center justify-between gap-2 text-left">
+        <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
+          Governance action history &mdash; real, who did what and when
+        </p>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className={`h-4 w-4 flex-none transition-transform ${open ? "rotate-180" : ""}`}>
+          <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
+      {open && (
+        <div className="mt-3 max-h-72 space-y-2 overflow-y-auto">
+          {entries.length === 0 ? (
+            <p className="text-sm text-[var(--muted)]">No governance actions logged yet.</p>
+          ) : (
+            entries.map((e) => (
+              <div key={e.id} className="rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-xs">
+                <span className="font-semibold">{e.actorName}</span>{" "}
+                {AUDIT_ACTION_LABELS[e.action] ?? e.action}
+                {e.detail && <span className="text-[var(--muted)]"> &mdash; {e.detail}</span>}
+                <span className="ml-2 text-[var(--muted)]" suppressHydrationWarning>
+                  {new Date(e.createdAt).toLocaleString("en-US")}
+                </span>
+              </div>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CommentsThread({ useCaseId }: { useCaseId: string }) {
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [text, setText] = useState("");
+  const [posting, setPosting] = useState(false);
+
+  function load() {
+    fetch(`/api/use-cases/${useCaseId}/comments`)
+      .then((r) => r.json())
+      .then((d) => setComments(d.comments ?? []));
+  }
+
+  useEffect(load, [useCaseId]);
+
+  async function handlePost() {
+    if (!text.trim()) return;
+    setPosting(true);
+    try {
+      const res = await fetch(`/api/use-cases/${useCaseId}/comments`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ body: text.trim() }),
+      });
+      if (res.ok) {
+        setText("");
+        load();
+      }
+    } finally {
+      setPosting(false);
+    }
+  }
+
+  return (
+    <div className="mt-6 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6">
+      <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
+        Discussion &mdash; real comments on this use case
+      </p>
+      <div className="mt-3 max-h-72 space-y-2 overflow-y-auto">
+        {comments.length === 0 ? (
+          <p className="text-sm text-[var(--muted)]">No comments yet.</p>
+        ) : (
+          comments.map((c) => (
+            <div key={c.id} className="rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm">
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-semibold">{c.authorName}</span>
+                <span className="text-xs text-[var(--muted)]" suppressHydrationWarning>
+                  {new Date(c.createdAt).toLocaleString("en-US")}
+                </span>
+              </div>
+              <p className="mt-1">{c.body}</p>
+            </div>
+          ))
+        )}
+      </div>
+      <div className="mt-3 flex gap-2">
+        <input
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder="Leave a note for other reviewers..."
+          className="flex-1 rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm"
+          onKeyDown={(e) => e.key === "Enter" && handlePost()}
+        />
+        <button
+          onClick={handlePost}
+          disabled={posting || !text.trim()}
+          className="rounded-full bg-[var(--brand)] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          Post
+        </button>
+      </div>
+    </div>
+  );
+}
 
 export default function GatePage() {
   const router = useRouter();
@@ -71,7 +246,10 @@ export default function GatePage() {
           </h1>
           <p className="mt-1 text-sm text-[var(--muted)]">{useCase.title}</p>
         </div>
-        <RiskBadge tier={useCase.riskTier} />
+        <div className="flex flex-col items-end gap-2">
+          <RiskBadge tier={useCase.riskTier} />
+          <PresenceIndicator useCaseId={useCase.id} />
+        </div>
       </div>
 
       <div
@@ -224,6 +402,8 @@ export default function GatePage() {
         </p>
       )}
 
+      <RecertificationBanner riskTier={useCase.riskTier} acknowledgedAt={gate.acknowledgedAt} />
+
       <div className="mt-8 flex justify-end">
         <button
           onClick={handleProceed}
@@ -233,6 +413,9 @@ export default function GatePage() {
           Proceed to ADR &rarr;
         </button>
       </div>
+
+      <GovernanceHistoryPanel useCaseId={useCase.id} />
+      <CommentsThread useCaseId={useCase.id} />
     </div>
   );
 }

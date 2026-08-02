@@ -4,7 +4,7 @@
 > needed to resume without re-deriving context. Ask the user "anything changed
 > since this was written?" if it's been a while.
 
-## ⚠️ Current checkpoint (2026-08-01, mid-deployment) — read this before anything below
+## ⚠️ Current checkpoint (2026-08-02) — read this before anything below
 
 Everything below this section describes an **early** version of the app and
 is stale (no database, wrong app name, old feature list). **README.md is the
@@ -14,6 +14,28 @@ real auth, real tool-calling execution, real live sync, real governance, real
 AI Gateway, deeper risk-scored intake, a real Observability overhaul). Read
 README.md for the real picture; treat this file's sections below only as
 historical color if useful.
+
+**Enterprise backlog: all 23 items done (2026-08-02).** The user asked
+(after three brainstorming rounds) to add 23 "make this a great enterprise
+product" ideas to a task list, then said "complete all of it" - all 23 are
+now real, fully-wired features (schema + backend + UI + verified in browser
+or via `npx tsc --noEmit && npx eslint . && npm run build`, consistent with
+this app's "no fake data" ethos): governance audit trail, recertification
+enforcement, org-scoped visibility + real multi-tenancy (`Organization`
+model, tenant + business-unit filtering in `GET /api/use-cases`), Slack
+notifications, cost budgets/alerts, a real unit-test suite (Vitest -
+`npm test`, 26 tests across `governance.ts`/`adr.ts`/`piiDetection.ts`/
+`confidence.ts`/`lineDiff.ts`), a real public REST API with API keys, Google
+SSO alongside local auth, CSV compliance export, real PII
+detection/redaction, real drift/anomaly monitoring, real scheduled data
+retention purge (Vercel Cron), confidence scoring on step outputs, dry-run
+execution mode, Model Registry CRUD, per-tenant usage quotas, comments
+threads, live presence indicators, ADR version diffing, data-sensitivity
+tool restrictions, and historical-performance-informed model recommendations.
+See the full file list in git history / `git log` around
+2026-08-02 for exact commits. **Nothing left on that backlog** - if the user
+says "keep going" with no specific ask, the honest answer is deployment
+(below) is the only real open thread.
 
 **What's actively in progress right now: real deployment.** State:
 

@@ -40,7 +40,8 @@ interface StoreContextValue {
     executionId: string,
     runNumber: number,
     masterAgentSummary: string,
-    steps: SubAgentStep[]
+    steps: SubAgentStep[],
+    dryRun?: boolean
   ) => Promise<void>;
   updateExecutionStep: (
     useCaseId: string,
@@ -283,7 +284,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       executionId: string,
       runNumber: number,
       masterAgentSummary: string,
-      steps: SubAgentStep[]
+      steps: SubAgentStep[],
+      dryRun = false
     ) => {
       const res = await fetch(`/api/use-cases/${useCaseId}/executions`, {
         method: "POST",
@@ -293,6 +295,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           runNumber,
           masterAgentSummary,
           steps: steps.map((s) => ({ id: s.id, name: s.name, tool: s.tool, task: s.task, rationale: s.rationale })),
+          dryRun,
         }),
       });
       const data = await res.json();
@@ -314,7 +317,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           [useCaseId]: {
             ...existing,
             executions,
-            useCase: { ...existing.useCase, status: "executing" },
+            useCase: dryRun ? existing.useCase : { ...existing.useCase, status: "executing" },
           },
         };
       });

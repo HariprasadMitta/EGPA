@@ -81,6 +81,7 @@ export function toGate(row: DbGovernanceGate): GovernanceGate {
     hitlTier: row.hitlTier as HitlTier,
     acknowledged: row.acknowledged,
     acknowledgedItems: row.acknowledgedItems,
+    acknowledgedAt: row.acknowledgedAt ? row.acknowledgedAt.toISOString() : null,
     requiresArbApproval: row.requiresArbApproval,
     arbApproved: row.arbApproved,
     arbApprovedBy: row.arbApprovedBy,
@@ -118,6 +119,9 @@ export function toSubAgentStep(row: DbSubAgentStep, toolCallCount = 0): SubAgent
     costUsd: row.costUsd,
     durationMs: row.durationMs,
     toolCallCount,
+    confidenceScore: row.confidenceScore,
+    piiDetected: row.piiDetected,
+    piiMatchCount: row.piiMatchCount,
   };
 }
 
@@ -142,6 +146,7 @@ export function toExecutionRun(
     totalOutputTokens: row.totalOutputTokens,
     totalCostUsd: row.totalCostUsd,
     error: row.error,
+    dryRun: row.dryRun,
   };
 }
 

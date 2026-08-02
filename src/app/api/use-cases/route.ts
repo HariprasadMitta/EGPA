@@ -1,8 +1,10 @@
 import { auth } from "@/auth";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { classifyRisk } from "@/lib/governance";
 import { toRiskComplianceDetails, toUseCase, toUseCaseBundle, USE_CASE_INCLUDE } from "@/lib/dbMapping";
 import { broadcastBundle } from "@/lib/broadcastBundle";
+import { canSeeAllUseCases } from "@/lib/roles";
 import {
   AutonomyLevel,
   DataSensitivity,
@@ -10,6 +12,7 @@ import {
   HumanOversightFrequency,
   IntegrationSurface,
   ModelSourcing,
+  UserRole,
 } from "@/types";
 
 export const runtime = "nodejs";
@@ -54,11 +57,34 @@ interface CreateUseCaseBody {
   riskComplianceDetails?: RiskComplianceDetailsBody;
 }
 
+// Real basic multi-tenancy + org-scoped visibility: a signed-in user sees
+// their own Organization's use cases (plus legacy rows with no org at all,
+// kept visible rather than orphaned by this feature landing after they
+// were created) - and within that, a Requester/Steward/Developer only sees
+// their own business unit's use cases, matching how a federated
+// organization's regular contributors actually work day to day.
+// governance-owner/arb/admin roles bypass the business-unit filter (real
+// oversight roles need to see across units) but stay tenant-isolated.
 export async function GET() {
   const session = await auth();
   if (!session?.user) return Response.json({ error: "Sign in required." }, { status: 401 });
 
+  const me = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { organizationId: true, businessUnit: true, role: true },
+  });
+
+  const where: Prisma.UseCaseWhereInput = {};
+  if (me?.organizationId) {
+    where.OR = [{ organizationId: me.organizationId }, { organizationId: null }];
+  }
+  const canSeeAllUnits = me?.role ? canSeeAllUseCases(me.role as UserRole) : false;
+  if (!canSeeAllUnits && me?.businessUnit) {
+    where.businessDomain = me.businessUnit;
+  }
+
   const rows = await prisma.useCase.findMany({
+    where,
     include: USE_CASE_INCLUDE,
     orderBy: { createdAt: "desc" },
   });
@@ -80,6 +106,11 @@ export async function POST(request: Request) {
   if (!body.title?.trim() || !body.description?.trim() || !body.owner?.trim() || !body.steward?.trim()) {
     return Response.json({ error: "Missing required fields." }, { status: 400 });
   }
+
+  const me = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { organizationId: true },
+  });
 
   const rcd = body.riskComplianceDetails;
   const riskTier = classifyRisk({
@@ -106,6 +137,7 @@ export async function POST(request: Request) {
       riskTier,
       status: "submitted",
       ownerUserId: session.user.id,
+      organizationId: me?.organizationId ?? null,
       riskComplianceDetails: rcd
         ? {
             create: {

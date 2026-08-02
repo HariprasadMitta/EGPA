@@ -63,6 +63,11 @@ function ExecutionCard({
                 Live
               </span>
             )}
+            {run.dryRun && (
+              <span className="ml-2 rounded-full bg-[var(--status-pending-bg)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--status-pending)]">
+                Dry run
+              </span>
+            )}
           </h3>
           <p className="mt-0.5 font-mono text-xs text-[var(--muted)]">{run.id}</p>
         </div>
@@ -123,6 +128,28 @@ function ExecutionCard({
                 <p className="mt-2 text-xs text-[var(--muted)]">
                   {step.provider} &middot; {step.inputTokens + step.outputTokens} tokens &middot; $
                   {step.costUsd.toFixed(4)} &middot; {step.durationMs}ms
+                  {step.confidenceScore !== null && (
+                    <>
+                      {" "}
+                      &middot;{" "}
+                      <span
+                        className={
+                          step.confidenceScore >= 0.7
+                            ? "text-[var(--status-done)]"
+                            : step.confidenceScore >= 0.4
+                              ? "text-[var(--tier-medium)]"
+                              : "text-[var(--tier-critical)]"
+                        }
+                      >
+                        confidence {(step.confidenceScore * 100).toFixed(0)}%
+                      </span>
+                    </>
+                  )}
+                  {step.piiDetected && (
+                    <span className="ml-1 text-[var(--tier-critical)]">
+                      &middot; {step.piiMatchCount} real PII match{step.piiMatchCount === 1 ? "" : "es"} redacted
+                    </span>
+                  )}
                 </p>
               )}
             </div>
@@ -272,6 +299,7 @@ export default function ExecutionPage() {
   const [planningSummary, setPlanningSummary] = useState("");
   const [planningSteps, setPlanningSteps] = useState<PlanStepDraft[]>([]);
   const [liveOutput, setLiveOutput] = useState<Record<string, string>>({});
+  const [dryRun, setDryRun] = useState(false);
 
   if (!user) {
     return (
@@ -411,10 +439,13 @@ export default function ExecutionPage() {
         costUsd: 0,
         durationMs: 0,
         toolCallCount: 0,
+        confidenceScore: null,
+        piiDetected: false,
+        piiMatchCount: 0,
       }));
 
       try {
-        await startExecution(useCase.id, executionId, runNumber, masterAgentSummary, steps);
+        await startExecution(useCase.id, executionId, runNumber, masterAgentSummary, steps, dryRun);
       } catch (err) {
         // No ExecutionRun row exists yet at this point (rejected before
         // creation - e.g. kill switch engaged, gate not cleared) - show the
@@ -535,17 +566,23 @@ export default function ExecutionPage() {
           then one call per sub-agent step), streamed live as they&apos;re
           generated, and spends real tokens.
         </p>
+        <label className="mt-3 flex items-center justify-center gap-2 text-xs text-[var(--muted)]">
+          <input type="checkbox" checked={dryRun} onChange={(e) => setDryRun(e.target.checked)} disabled={running} />
+          Dry run &mdash; real LLM calls, real cost, but excluded from the audit trail and anomaly baselines (for iterating on a use case without it counting as a governed execution)
+        </label>
         {planError && <p className="mt-3 text-sm text-[var(--tier-critical)]">{planError}</p>}
         <button
           onClick={runExecution}
           disabled={running}
-          className="mt-4 rounded-full bg-[var(--brand)] px-6 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[var(--brand-strong)] disabled:cursor-not-allowed disabled:opacity-60"
+          className={`mt-4 rounded-full px-6 py-3 text-sm font-semibold text-white shadow-sm transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+            dryRun ? "bg-[var(--status-pending)] hover:opacity-90" : "bg-[var(--brand)] hover:bg-[var(--brand-strong)]"
+          }`}
         >
           {running
             ? planning
               ? "Planning..."
               : "Running..."
-            : `Run execution${executions.length > 0 ? ` (run #${executions.length + 1})` : ""}`}
+            : `${dryRun ? "Run dry-run" : "Run execution"}${executions.length > 0 ? ` (run #${executions.length + 1})` : ""}`}
         </button>
 
         {planning && (planningSummary || planningSteps.length > 0) && (

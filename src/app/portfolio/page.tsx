@@ -47,7 +47,15 @@ export default function PortfolioPage() {
             stage for that use case.
           </p>
         </div>
-        <PipelineTrainLegend />
+        <div className="flex items-center gap-3">
+          <a
+            href="/api/reports/portfolio-csv"
+            className="rounded-full border border-[var(--border)] bg-[var(--surface)] px-4 py-1.5 text-sm font-medium hover:bg-[var(--background)]"
+          >
+            Export CSV
+          </a>
+          <PipelineTrainLegend />
+        </div>
       </div>
 
       <div className="mt-6 overflow-x-auto rounded-xl border border-[var(--border)] bg-[var(--surface)]">

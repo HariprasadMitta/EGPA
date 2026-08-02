@@ -83,10 +83,28 @@ export interface GovernanceGate {
   hitlTier: HitlTier;
   acknowledged: boolean;
   acknowledgedItems: string[];
+  acknowledgedAt: string | null;
   requiresArbApproval: boolean;
   arbApproved: boolean;
   arbApprovedBy: string | null;
   arbApprovedAt: string | null;
+}
+
+export interface AuditLogEntry {
+  id: string;
+  useCaseId: string;
+  actorName: string;
+  action: string;
+  detail: string | null;
+  createdAt: string;
+}
+
+export interface Comment {
+  id: string;
+  useCaseId: string;
+  authorName: string;
+  body: string;
+  createdAt: string;
 }
 
 export interface ADR {
@@ -184,6 +202,9 @@ export interface SubAgentStep {
   costUsd: number;
   durationMs: number;
   toolCallCount: number;
+  confidenceScore: number | null;
+  piiDetected: boolean;
+  piiMatchCount: number;
 }
 
 export interface ExecutionRun {
@@ -199,6 +220,7 @@ export interface ExecutionRun {
   totalOutputTokens: number;
   totalCostUsd: number;
   error: string | null;
+  dryRun: boolean;
 }
 
 export interface PingResult {

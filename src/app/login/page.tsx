@@ -82,6 +82,26 @@ export default function LoginPage() {
             Sign up
           </Link>
         </p>
+
+        {process.env.NEXT_PUBLIC_GOOGLE_SSO_ENABLED === "true" && (
+          <>
+            <div className="my-4 flex items-center gap-3 text-xs text-[var(--muted)]">
+              <div className="h-px flex-1 bg-[var(--border)]" />
+              or
+              <div className="h-px flex-1 bg-[var(--border)]" />
+            </div>
+            <button
+              type="button"
+              onClick={() => signIn("google", { callbackUrl: "/portfolio" })}
+              className="w-full rounded-full border border-[var(--border)] bg-[var(--background)] px-6 py-3 text-sm font-semibold transition-colors hover:bg-[var(--surface)]"
+            >
+              Sign in with Google (SSO)
+            </button>
+            <p className="mt-2 text-center text-xs text-[var(--muted)]">
+              Real Auth.js OIDC provider - first sign-in creates a real account with the default Requester role.
+            </p>
+          </>
+        )}
       </div>
     </div>
   );

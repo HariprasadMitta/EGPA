@@ -73,6 +73,14 @@ export function NavBar() {
               Model Builder
             </Link>
           )}
+          {user && user.role === "admin" && (
+            <Link
+              href="/admin"
+              className={pillClasses(pathname === "/admin", "bg-[var(--brand-red)]")}
+            >
+              Admin
+            </Link>
+          )}
 
           <span className="mx-1 h-5 w-px bg-[var(--border)]" />
           {user ? (

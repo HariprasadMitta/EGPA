@@ -4,6 +4,80 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useStore } from "@/lib/store";
 import { RiskBadge } from "@/components/RiskBadge";
+import { diffLines } from "@/lib/lineDiff";
+import { ADR } from "@/types";
+
+function VersionDiffPanel({ useCaseId, latestVersion }: { useCaseId: string; latestVersion: number }) {
+  const [versions, setVersions] = useState<ADR[]>([]);
+  const [open, setOpen] = useState(false);
+  const [fromVersion, setFromVersion] = useState<number | null>(null);
+  const [toVersion, setToVersion] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!open || versions.length > 0) return;
+    fetch(`/api/use-cases/${useCaseId}/adr/versions`)
+      .then((r) => r.json())
+      .then((d) => {
+        const v: ADR[] = d.versions ?? [];
+        setVersions(v);
+        if (v.length >= 2) {
+          setFromVersion(v[v.length - 2].version);
+          setToVersion(v[v.length - 1].version);
+        }
+      });
+  }, [open, versions.length, useCaseId]);
+
+  if (latestVersion < 2) return null; // nothing to diff yet - only one real version exists
+
+  const from = versions.find((v) => v.version === fromVersion);
+  const to = versions.find((v) => v.version === toVersion);
+  const diff = from && to ? diffLines(from.content, to.content) : null;
+
+  return (
+    <div className="mt-6 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6">
+      <button type="button" onClick={() => setOpen((v) => !v)} className="flex w-full items-center justify-between gap-2 text-left">
+        <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
+          Compare versions &mdash; real diff between two real ADR versions
+        </p>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className={`h-4 w-4 flex-none transition-transform ${open ? "rotate-180" : ""}`}>
+          <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
+      {open && versions.length > 0 && (
+        <>
+          <div className="mt-3 flex items-center gap-3 text-sm">
+            <select value={fromVersion ?? ""} onChange={(e) => setFromVersion(Number(e.target.value))} className="rounded-md border border-[var(--border)] bg-[var(--background)] px-2 py-1.5">
+              {versions.map((v) => <option key={v.version} value={v.version}>v{v.version}</option>)}
+            </select>
+            <span className="text-[var(--muted)]">&rarr;</span>
+            <select value={toVersion ?? ""} onChange={(e) => setToVersion(Number(e.target.value))} className="rounded-md border border-[var(--border)] bg-[var(--background)] px-2 py-1.5">
+              {versions.map((v) => <option key={v.version} value={v.version}>v{v.version}</option>)}
+            </select>
+          </div>
+          {diff && (
+            <pre className="mt-3 max-h-96 overflow-y-auto whitespace-pre-wrap rounded-md border border-[var(--border)] bg-[var(--background)] p-4 font-mono text-xs leading-relaxed">
+              {diff.map((line, i) => (
+                <div
+                  key={i}
+                  className={
+                    line.type === "added"
+                      ? "bg-[var(--tier-low-bg)] text-[var(--tier-low)]"
+                      : line.type === "removed"
+                        ? "bg-[var(--tier-critical-bg)] text-[var(--tier-critical)] line-through decoration-1"
+                        : ""
+                  }
+                >
+                  {line.type === "added" ? "+ " : line.type === "removed" ? "- " : "  "}
+                  {line.text}
+                </div>
+              ))}
+            </pre>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
 
 export default function ADRPage() {
   const { active, generateADR } = useStore();
@@ -119,6 +193,8 @@ export default function ADRPage() {
       <pre className="mt-6 whitespace-pre-wrap rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6 font-mono text-xs leading-relaxed">
         {adr.content}
       </pre>
+
+      <VersionDiffPanel useCaseId={useCase.id} latestVersion={adr.version} />
 
       <div className="mt-8 flex justify-end">
         <Link

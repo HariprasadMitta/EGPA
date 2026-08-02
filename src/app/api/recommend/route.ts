@@ -1,7 +1,8 @@
 import { classifyRisk } from "@/lib/governance";
 import { gatewayChatCompletion } from "@/lib/litellm";
 import { clientIp, createRateLimiter } from "@/lib/rateLimit";
-import { AutonomyLevel, DataSensitivity, IntegrationSurface } from "@/types";
+import { prisma } from "@/lib/prisma";
+import { AutonomyLevel, DataSensitivity, IntegrationSurface, RiskTier } from "@/types";
 
 export const runtime = "nodejs";
 
@@ -55,6 +56,37 @@ way (e.g. "GitHub MCP server", "Internal Data Platform MCP server") - MCP is
 a first-class integration option here, not a fallback.`;
 }
 
+// Real historical performance summary, not a blind guess: aggregates real
+// SubAgentStep rows from past executions on use cases at the same risk
+// tier, grouped by provider - gives the recommendation engine (and the
+// human reading the rationale) actual data on which providers have
+// performed well at this tier, instead of picking without any track record.
+async function historicalPerformanceHint(riskTier: RiskTier): Promise<string | null> {
+  const steps = await prisma.subAgentStep.findMany({
+    where: { status: "done", provider: { not: null }, executionRun: { useCase: { riskTier } } },
+    select: { provider: true, durationMs: true, costUsd: true },
+    take: 500,
+  });
+  if (steps.length < 3) return null;
+
+  const byProvider = new Map<string, { count: number; durationSum: number; costSum: number }>();
+  for (const s of steps) {
+    const key = s.provider!;
+    const entry = byProvider.get(key) ?? { count: 0, durationSum: 0, costSum: 0 };
+    entry.count += 1;
+    entry.durationSum += s.durationMs;
+    entry.costSum += s.costUsd;
+    byProvider.set(key, entry);
+  }
+
+  const lines = [...byProvider.entries()]
+    .sort(([, a], [, b]) => b.count - a.count)
+    .slice(0, 3)
+    .map(([provider, e]) => `- ${provider}: ${e.count} real steps, avg ${(e.durationSum / e.count / 1000).toFixed(1)}s, avg $${(e.costSum / e.count).toFixed(4)}/step`);
+
+  return `Real historical performance at ${riskTier} tier from this platform's own past executions (reference this if it's genuinely relevant, don't force it):\n${lines.join("\n")}`;
+}
+
 function extractJson(text: string): unknown {
   const trimmed = text.trim();
   const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
@@ -101,6 +133,8 @@ export async function POST(request: Request) {
     integrationSurface: body.integrationSurface,
   });
 
+  const performanceHint = await historicalPerformanceHint(riskTier);
+
   const userMessage = `Use case title: ${body.title}
 Business domain: ${body.businessDomain}
 Data sensitivity: ${body.dataSensitivity}
@@ -110,7 +144,8 @@ Expected users: ${body.expectedUsers}
 Computed risk tier: ${riskTier}
 
 Free-text use case description:
-${body.description}`;
+${body.description}
+${performanceHint ? `\n${performanceHint}` : ""}`;
 
   try {
     const { provider, text } = await gatewayChatCompletion(buildSystemPrompt(), userMessage, 1024);

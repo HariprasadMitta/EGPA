@@ -58,6 +58,7 @@ function makeBundle(params: {
     hitlTier: template.hitlTier,
     acknowledged: params.acknowledged,
     acknowledgedItems: params.acknowledged ? template.requiredControls : [],
+    acknowledgedAt: params.acknowledged ? params.createdAt : null,
     requiresArbApproval: template.requiresArbApproval,
     arbApproved: params.acknowledged,
     arbApprovedBy:

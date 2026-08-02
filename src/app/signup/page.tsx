@@ -14,6 +14,8 @@ export default function SignupPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [organizationName, setOrganizationName] = useState("");
+  const [businessUnit, setBusinessUnit] = useState("");
   const [role, setRole] = useState<UserRole | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -34,7 +36,14 @@ export default function SignupPage() {
       const res = await fetch("/api/auth/signup", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ name: name.trim(), email: email.trim(), password, role }),
+        body: JSON.stringify({
+          name: name.trim(),
+          email: email.trim(),
+          password,
+          role,
+          organizationName: organizationName.trim() || undefined,
+          businessUnit: businessUnit.trim() || undefined,
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -89,6 +98,26 @@ export default function SignupPage() {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           placeholder="At least 8 characters"
+          className="mt-1 w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm"
+        />
+
+        <label className="mt-4 block text-sm font-medium">
+          Organization <span className="font-normal text-[var(--muted)]">(optional)</span>
+        </label>
+        <input
+          value={organizationName}
+          onChange={(e) => setOrganizationName(e.target.value)}
+          placeholder="e.g. Contoso Bank - joining an existing name links you to the same tenant"
+          className="mt-1 w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm"
+        />
+
+        <label className="mt-4 block text-sm font-medium">
+          Business unit <span className="font-normal text-[var(--muted)]">(optional)</span>
+        </label>
+        <input
+          value={businessUnit}
+          onChange={(e) => setBusinessUnit(e.target.value)}
+          placeholder="e.g. Retail Banking - scopes which use cases you see by default"
           className="mt-1 w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm"
         />
 

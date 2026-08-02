@@ -4,6 +4,7 @@ import { neonConfig } from "@neondatabase/serverless";
 import ws from "ws";
 import bcrypt from "bcryptjs";
 import { SAMPLE_BUNDLES } from "../src/lib/seed";
+import { MODEL_REGISTRY, MCP_SERVERS } from "../src/lib/modelRegistry";
 
 neonConfig.webSocketConstructor = ws;
 
@@ -80,6 +81,7 @@ async function main() {
           hitlTier: gate.hitlTier,
           acknowledged: gate.acknowledged,
           acknowledgedItems: gate.acknowledgedItems,
+          acknowledgedAt: gate.acknowledgedAt ? new Date(gate.acknowledgedAt) : null,
           requiresArbApproval: gate.requiresArbApproval,
           arbApproved: gate.arbApproved,
           arbApprovedBy: gate.arbApprovedBy,
@@ -138,6 +140,25 @@ async function main() {
   }
 
   console.log(`Seeded ${SAMPLE_BUNDLES.length} use cases under ${demoUser.email}.`);
+
+  // One-time backfill of the Model Registry from what used to be hardcoded
+  // arrays (src/lib/modelRegistry.ts) into real DB rows - the registry is
+  // now genuinely admin-manageable, this just seeds its starting state.
+  for (const m of MODEL_REGISTRY) {
+    await prisma.modelRegistryEntry.upsert({
+      where: { id: m.id },
+      update: {},
+      create: { id: m.id, name: m.name, vendor: m.vendor, version: m.version, status: m.status, allowedRiskTiers: m.allowedRiskTiers },
+    });
+  }
+  for (const s of MCP_SERVERS) {
+    await prisma.mcpServerEntry.upsert({
+      where: { id: s.id },
+      update: {},
+      create: { id: s.id, name: s.name, publisher: s.publisher, description: s.description, status: s.status, allowedRiskTiers: s.allowedRiskTiers },
+    });
+  }
+  console.log(`Seeded ${MODEL_REGISTRY.length} model registry entries and ${MCP_SERVERS.length} MCP servers.`);
 }
 
 main()

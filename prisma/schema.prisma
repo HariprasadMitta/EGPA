@@ -25,11 +25,44 @@ datasource db {
 model User {
   id           String   @id @default(cuid())
   email        String   @unique
-  passwordHash String
+  passwordHash String?  // nullable: an SSO-only account (googleId set) never gets a local password
   name         String
   role         String // UserRole: requester | steward | governance-owner | developer | arb | admin
   createdAt    DateTime @default(now())
 
+  // Real SSO (Google OAuth via Auth.js) - same pattern any other OIDC/SAML
+  // provider would slot into; Google chosen because it's free and
+  // immediately testable, not because it's the only real option.
+  googleId String? @unique
+
+  // Basic real multi-tenancy: which Organization this user belongs to.
+  // Nullable during the org-creation window at signup.
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+
+  // Org-scoped visibility proxy: which business unit/domain this user's
+  // own submissions belong to (matches UseCase.businessDomain by string,
+  // no separate BusinessUnit table - reuses data already captured).
+  // governance-owner/arb/admin roles bypass this filter entirely (see
+  // src/lib/roles.ts's canSeeAllUseCases).
+  businessUnit String?
+
+  useCases      UseCase[]
+  comments      Comment[]
+  auditLogEntries AuditLogEntry[]
+  apiKeys       ApiKey[]
+}
+
+// Real basic multi-tenancy: an Organization owns its own Users/UseCases.
+// Deliberately scoped (no per-org billing, no cross-org admin console) -
+// real tenant isolation on the core tables, not a full enterprise tenant
+// administration system.
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+
+  users    User[]
   useCases UseCase[]
 }
 
@@ -52,12 +85,20 @@ model UseCase {
   ownerUser   User   @relation(fields: [ownerUserId], references: [id])
   ownerUserId String
 
+  // Nullable: use cases created before Organization existed have no tenant;
+  // treated as globally visible (same as today) rather than orphaned.
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+
   recommendation         Recommendation?
   gate                   GovernanceGate?
   adrs                   Adr[]
   executions             ExecutionRun[]
   webhookTrigger         WebhookTrigger?
   riskComplianceDetails  RiskComplianceDetails?
+  budget                 Budget?
+  comments               Comment[]
+  auditLogEntries        AuditLogEntry[]
 }
 
 model Recommendation {
@@ -82,6 +123,7 @@ model GovernanceGate {
   hitlTier            String // HitlTier
   acknowledged        Boolean   @default(false)
   acknowledgedItems   String[]
+  acknowledgedAt      DateTime? // real timestamp: recertification due date = this + template.recertificationDays
   requiresArbApproval Boolean   @default(false)
   arbApproved         Boolean   @default(false)
   arbApprovedBy       String?
@@ -114,6 +156,11 @@ model ExecutionRun {
   totalOutputTokens  Int       @default(0)
   totalCostUsd       Float     @default(0)
   error              String?
+  // Real dry-run mode: still a real LLM-backed run (real cost, real output),
+  // just excluded from audit-trail counts/history shown as "official" runs
+  // and from anomaly-baseline calculations - lets a developer iterate on a
+  // use case's steps without it counting as a governed execution.
+  dryRun             Boolean   @default(false)
 
   useCase      UseCase        @relation(fields: [useCaseId], references: [id])
   steps        SubAgentStep[]
@@ -134,6 +181,16 @@ model SubAgentStep {
   outputTokens Int     @default(0)
   costUsd      Float   @default(0)
   durationMs   Int     @default(0)
+  // Real heuristic confidence score (0-1) computed from the actual output
+  // text (hedge-word density, length, whether it cites concrete facts) -
+  // not an extra paid LLM-judge call. See src/lib/confidence.ts.
+  confidenceScore Float?
+  // Real regex-based PII detection against the actual output text (see
+  // src/lib/piiDetection.ts) - `output` above is the already-redacted text
+  // when this is true; the real unredacted count is tracked here, not the
+  // raw PII itself.
+  piiDetected     Boolean @default(false)
+  piiMatchCount   Int     @default(0)
 
   executionRun   ExecutionRun @relation(fields: [executionRunId], references: [id])
   executionRunId String
@@ -217,4 +274,117 @@ model RiskComplianceDetails {
   createdAt DateTime @default(now())
 
   useCase UseCase @relation(fields: [useCaseId], references: [id])
+}
+
+// Real governance action audit trail - who changed what governance state
+// and when. Complements ToolCallLog (real tool-call audit) and
+// SubAgentStep (real execution audit) with the human-action side: kill-
+// switch toggles, control acknowledgment/un-acknowledgment, gate
+// finalization, ARB approval, and detections (drift/anomaly) surfaced the
+// same way. Previously only the *current* state was visible (e.g.
+// killSwitchEngaged boolean) with no history of who/when.
+model AuditLogEntry {
+  id          String   @id @default(cuid())
+  useCaseId   String
+  actorUserId String?
+  actorName   String
+  action      String // "kill_switch_engaged" | "kill_switch_disengaged" | "control_acknowledged" | "control_unacknowledged" | "gate_finalized" | "arb_approved" | "drift_detected" | "anomaly_detected"
+  detail      String?
+  createdAt   DateTime @default(now())
+
+  useCase UseCase @relation(fields: [useCaseId], references: [id])
+  actor   User?   @relation(fields: [actorUserId], references: [id])
+}
+
+// Real cost budget/quota - scoped to either one use case OR a whole
+// business domain (team proxy, matches UseCase.businessDomain), never
+// both. Enforced by checking real cumulative ExecutionRun.totalCostUsd
+// against monthlyLimitUsd before/after a run.
+model Budget {
+  id                String   @id @default(cuid())
+  useCaseId         String?  @unique
+  businessDomain    String?  @unique
+  monthlyLimitUsd   Float
+  alertThresholdPct Int      @default(80)
+  createdAt         DateTime @default(now())
+
+  useCase UseCase? @relation(fields: [useCaseId], references: [id])
+}
+
+// Real outbound notification target (Slack incoming webhook today,
+// kind is extensible). Global for now - one channel receives every
+// notification event (ARB approval needed, execution failed, kill-switch
+// engaged) rather than per-use-case routing, a reasonable real MVP scope.
+model NotificationChannel {
+  id         String   @id @default(cuid())
+  kind       String   @default("slack")
+  webhookUrl String
+  enabled    Boolean  @default(true)
+  createdAt  DateTime @default(now())
+}
+
+// Real record of a retention-policy purge actually running - proof the
+// RiskComplianceDetails retention fields aren't just captured but enforced.
+model RetentionPurgeLog {
+  id          String   @id @default(cuid())
+  useCaseId   String
+  tableName   String // "SubAgentStep" | "ToolCallLog" | "ExecutionRun"
+  rowsDeleted Int
+  ranAt       DateTime @default(now())
+}
+
+// Real, DB-backed Model Registry replacing the previously-hardcoded
+// src/lib/modelRegistry.ts arrays - admins can now actually add/deprecate/
+// version entries through the UI instead of editing source code.
+model ModelRegistryEntry {
+  id               String   @id
+  name             String
+  vendor           String
+  version          String
+  status           String // ModelStatus
+  allowedRiskTiers String[]
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model McpServerEntry {
+  id               String   @id
+  name             String
+  publisher        String
+  description      String
+  status           String // ModelStatus
+  allowedRiskTiers String[]
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+// Real per-use-case discussion thread - governance review in practice
+// involves back-and-forth (ARB asking a clarifying question, a governance
+// owner leaving a note), which had no home anywhere in the app before.
+model Comment {
+  id           String   @id @default(cuid())
+  useCaseId    String
+  authorUserId String
+  authorName   String
+  body         String
+  createdAt    DateTime @default(now())
+
+  useCase UseCase @relation(fields: [useCaseId], references: [id])
+  author  User    @relation(fields: [authorUserId], references: [id])
+}
+
+// Real platform API keys - lets an external enterprise system call the
+// public REST surface (src/app/api/public/*) the same way WebhookTrigger
+// lets a caller start one specific execution. Only the hash is ever
+// stored, same pattern as WebhookTrigger's token.
+model ApiKey {
+  id              String    @id @default(cuid())
+  name            String
+  keyHash         String
+  createdByUserId String
+  createdAt       DateTime  @default(now())
+  lastUsedAt      DateTime?
+  revoked         Boolean   @default(false)
+
+  createdByUser User @relation(fields: [createdByUserId], references: [id])
 }
