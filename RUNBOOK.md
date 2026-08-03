@@ -51,6 +51,40 @@ infrastructure (not assumed) - last verified 2026-08-02 via the Neon API
   and know that regenerating provider API keys is possible if the vault itself
   is ever lost.
 
+## Cost/billing posture across dependencies
+
+Checked live on 2026-08-03 after a real R493.87 (~$27) Google Cloud charge
+was reported against the personal card used to set this up. Recorded here
+so it doesn't need re-diagnosing from scratch next time.
+
+| Service | Billing required? | Status when checked |
+|---|---|---|
+| Vercel (app hosting) | No - free Hobby tier | Safe |
+| Neon Postgres | No - free tier | Safe |
+| Upstash Redis | No - free tier | Safe |
+| Pinecone | No - free Starter tier | Safe |
+| Cohere | No - free trial key | Safe |
+| Groq | No - genuinely free API tier | Safe; served real execution traffic |
+| OpenRouter | Only if credits purchased | No payment method added - free-tier models only |
+| Anthropic API | Only if credits purchased | No API credits purchased |
+| Google Gemini API | Only if billing enabled on the project | `billingEnabled: false` on the "Default Gemini Project" - cannot charge anything |
+| **Google Cloud Run** (LiteLLM Gateway) | **Yes - mandatory** | The only service here with a real, active billing account (`01716A-3BBF75-A3E463`) tied to a real card |
+
+**Conclusion on the R493.87 charge:** Cloud Run's `minScale` was unset
+(defaults to 0 - no always-on instance), Cloud Build showed zero jobs, and
+Billing Reports showed $0 actual usage for the period. By elimination, this
+is almost certainly a one-time card-verification authorization hold that
+Google places when a payment method is first attached to a billing account
+- not usage-based, and expected to auto-reverse within ~3-10 business days.
+If it hasn't reversed by day 10, follow up via Console -> Support -> Billing
+referencing the specific transaction.
+
+**Structural takeaway:** Google Cloud is the only dependency in this stack
+that *requires* a linked card to function at all (Cloud Run mandates a
+billing account); every other real dependency, including every LLM
+provider actually in the Gateway's fallback chain, runs on genuinely free
+tiers unless someone deliberately adds payment info there too.
+
 ## What would make this a real disaster-recovery posture, not just a backup fact
 
 Not built yet - listed here honestly rather than implied as done:
