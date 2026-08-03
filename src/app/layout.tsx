@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { auth } from "@/auth";
 import { StoreProvider } from "@/lib/store";
 import { AuthProvider } from "@/lib/auth";
 import { MlOpsProvider } from "@/lib/mlops";
@@ -22,18 +23,19 @@ export const metadata: Metadata = {
     "Submit an AI/agentic use case and get a governed, explainable architecture recommendation, then execute and monitor it from one centralized view.",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const session = await auth();
   return (
     <html
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        <AuthProvider>
+        <AuthProvider session={session}>
           <StoreProvider>
             <MlOpsProvider>
               <NavBar />
