@@ -8,7 +8,8 @@ export type NotificationEvent =
   | { kind: "budget_alert"; scope: string; spentUsd: number; limitUsd: number }
   | { kind: "stale_approval_escalation"; useCaseTitle: string; useCaseId: string; daysPending: number }
   | { kind: "material_change_reapproval"; useCaseTitle: string; useCaseId: string; oldRiskTier: string; newRiskTier: string }
-  | { kind: "undeclared_tool_detected"; useCaseTitle: string; useCaseId: string; tools: string[] };
+  | { kind: "undeclared_tool_detected"; useCaseTitle: string; useCaseId: string; tools: string[] }
+  | { kind: "use_case_rejected"; useCaseTitle: string; useCaseId: string; reason: string };
 
 interface NotificationSummary {
   title: string;
@@ -60,6 +61,12 @@ function summarize(event: NotificationEvent): NotificationSummary {
         text: `The production system behind "${event.useCaseTitle}" reported using tool(s) outside its declared, approved stack: ${event.tools.join(", ")}.`,
         path: "/gate",
       };
+    case "use_case_rejected":
+      return {
+        title: "Use case rejected",
+        text: `"${event.useCaseTitle}" was rejected: ${event.reason}`,
+        path: "/portfolio",
+      };
   }
 }
 
@@ -71,6 +78,7 @@ const SLACK_EMOJI: Record<NotificationEvent["kind"], string> = {
   stale_approval_escalation: ":rotating_light:",
   material_change_reapproval: ":arrows_counterclockwise:",
   undeclared_tool_detected: ":mag:",
+  use_case_rejected: ":no_entry_sign:",
 };
 
 function buildSlackPayload(summary: NotificationSummary, kind: NotificationEvent["kind"], origin: string) {

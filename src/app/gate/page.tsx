@@ -209,6 +209,8 @@ const AUDIT_ACTION_LABELS: Record<string, string> = {
   material_change_reapproval: "amended risk-relevant inputs, sent back for re-approval",
   undeclared_tool_detected: "reported undeclared tool usage",
   preflight_check_denied: "denied a real-time preflight check",
+  use_case_rejected: "rejected this use case",
+  use_case_resubmitted: "resubmitted this use case",
 };
 
 function RecertificationBanner({
@@ -474,6 +476,105 @@ function GovernanceHistoryPanel({ useCaseId }: { useCaseId: string }) {
             )}
           </div>
         </>
+      )}
+    </div>
+  );
+}
+
+function RejectPanel({ useCaseId, canReject }: { useCaseId: string; canReject: boolean }) {
+  const { rejectUseCase } = useStore();
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  if (!canReject) return null;
+
+  async function handleReject() {
+    if (!reason.trim()) {
+      setError("Enter a reason for rejecting this use case.");
+      return;
+    }
+    setSubmitting(true);
+    setError(null);
+    const err = await rejectUseCase(useCaseId, reason.trim());
+    setSubmitting(false);
+    if (err) setError(err);
+  }
+
+  return (
+    <div className="mt-6 rounded-xl border border-[var(--tier-critical)]/30 bg-[var(--surface)] p-6">
+      <button type="button" onClick={() => setOpen((v) => !v)} className="flex w-full items-center justify-between gap-2 text-left">
+        <p className="text-xs font-semibold uppercase tracking-wide text-[var(--tier-critical)]">
+          Reject this use case
+        </p>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className={`h-4 w-4 flex-none transition-transform ${open ? "rotate-180" : ""}`}>
+          <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
+      {open && (
+        <div className="mt-4 space-y-3">
+          <p className="text-xs text-[var(--muted)]">
+            Blocks this use case from proceeding and sends it back to the owner, who can amend and resubmit it.
+          </p>
+          <textarea
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            placeholder="Reason for rejection - shown to the owner and recorded in the audit trail"
+            rows={3}
+            className="w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm"
+          />
+          <button
+            type="button"
+            onClick={handleReject}
+            disabled={submitting}
+            className="rounded-full bg-[var(--tier-critical)] px-4 py-2 text-xs font-semibold text-white transition-colors hover:opacity-90 disabled:opacity-60"
+          >
+            {submitting ? "Rejecting..." : "Reject use case"}
+          </button>
+          {error && <p className="text-xs text-[var(--tier-critical)]">{error}</p>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ResubmitBanner({ useCaseId, canResubmit }: { useCaseId: string; canResubmit: boolean }) {
+  const { resubmitUseCase } = useStore();
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleResubmit() {
+    setSubmitting(true);
+    setError(null);
+    const err = await resubmitUseCase(useCaseId);
+    setSubmitting(false);
+    if (err) setError(err);
+  }
+
+  return (
+    <div className="mt-6 rounded-xl border border-[var(--tier-critical)]/40 bg-[var(--tier-critical-bg)] p-6">
+      <p className="text-sm font-semibold text-[var(--tier-critical)]">This use case was rejected.</p>
+      <p className="mt-1 text-sm text-[var(--tier-critical)]">
+        See the governance action history below for the reason. Amend the use case as needed, then resubmit to
+        send it back through the recommendation and gate flow.
+      </p>
+      {canResubmit ? (
+        <>
+          <button
+            type="button"
+            onClick={handleResubmit}
+            disabled={submitting}
+            className="mt-3 rounded-full bg-[var(--brand)] px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-[var(--brand-strong)] disabled:opacity-60"
+          >
+            {submitting ? "Resubmitting..." : "Resubmit for review"}
+          </button>
+          {error && <p className="mt-2 text-xs text-[var(--tier-critical)]">{error}</p>}
+        </>
+      ) : (
+        <p className="mt-3 text-xs text-[var(--tier-critical)]">
+          Only the use case owner or an Admin can resubmit it.
+        </p>
       )}
     </div>
   );
@@ -771,6 +872,15 @@ export default function GatePage() {
         </p>
       )}
 
+      {useCase.status === "rejected" ? (
+        <ResubmitBanner
+          useCaseId={useCase.id}
+          canResubmit={Boolean(user) && (user?.id === useCase.ownerUserId || user?.role === "admin")}
+        />
+      ) : (
+        <RejectPanel useCaseId={useCase.id} canReject={isArb || canToggleKillSwitchRole} />
+      )}
+
       <RecertificationBanner useCaseId={useCase.id} riskTier={useCase.riskTier} acknowledgedAt={gate.acknowledgedAt} />
 
       <MaterialChangePanel
@@ -787,7 +897,7 @@ export default function GatePage() {
       <div className="mt-8 flex justify-end">
         <button
           onClick={handleProceed}
-          disabled={!allAcknowledged}
+          disabled={!allAcknowledged || useCase.status === "rejected"}
           className="rounded-full bg-[var(--brand)] px-6 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[var(--brand-strong)] disabled:cursor-not-allowed disabled:bg-[var(--border)] disabled:text-[var(--muted)] disabled:shadow-none"
         >
           Proceed to ADR &rarr;

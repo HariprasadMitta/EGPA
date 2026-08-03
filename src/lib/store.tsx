@@ -34,6 +34,8 @@ interface StoreContextValue {
   finalizeGate: (useCaseId: string) => Promise<void>;
   approveArb: (useCaseId: string) => Promise<void>;
   attestRecertification: (useCaseId: string) => Promise<string | null>;
+  rejectUseCase: (useCaseId: string, reason: string) => Promise<string | null>;
+  resubmitUseCase: (useCaseId: string) => Promise<string | null>;
   generateADR: (useCaseId: string) => Promise<void>;
   loadSample: (id: string) => void;
   startExecution: (
@@ -268,6 +270,38 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     return null;
   }, []);
 
+  const rejectUseCase = useCallback(async (useCaseId: string, reason: string): Promise<string | null> => {
+    const res = await fetch(`/api/use-cases/${useCaseId}/gate`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ action: "reject", reason }),
+    });
+    const data = await res.json();
+    if (!res.ok) return data.error ?? "Failed to reject.";
+    setBundlesMap((prev) => {
+      const existing = prev[useCaseId];
+      if (!existing) return prev;
+      return { ...prev, [useCaseId]: { ...existing, useCase: data.useCase } };
+    });
+    return null;
+  }, []);
+
+  const resubmitUseCase = useCallback(async (useCaseId: string): Promise<string | null> => {
+    const res = await fetch(`/api/use-cases/${useCaseId}/gate`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ action: "resubmit" }),
+    });
+    const data = await res.json();
+    if (!res.ok) return data.error ?? "Failed to resubmit.";
+    setBundlesMap((prev) => {
+      const existing = prev[useCaseId];
+      if (!existing) return prev;
+      return { ...prev, [useCaseId]: { ...existing, useCase: data.useCase, gate: data.gate } };
+    });
+    return null;
+  }, []);
+
   const generateADR = useCallback(async (useCaseId: string) => {
     const res = await fetch(`/api/use-cases/${useCaseId}/adr`, { method: "POST" });
     const data = await res.json();
@@ -423,6 +457,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       finalizeGate,
       approveArb,
       attestRecertification,
+      rejectUseCase,
+      resubmitUseCase,
       generateADR,
       loadSample,
       startExecution,
@@ -442,6 +478,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       finalizeGate,
       approveArb,
       attestRecertification,
+      rejectUseCase,
+      resubmitUseCase,
       generateADR,
       loadSample,
       startExecution,

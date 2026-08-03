@@ -33,7 +33,8 @@ export type UseCaseStatus =
   | "gated"
   | "approved"
   | "executing"
-  | "executed";
+  | "executed"
+  | "rejected";
 
 export interface UseCase {
   id: string;

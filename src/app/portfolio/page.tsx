@@ -14,6 +14,7 @@ const STATUS_LABELS: Record<UseCaseStatus, string> = {
   approved: "Approved",
   executing: "Executing",
   executed: "Executed",
+  rejected: "Rejected",
 };
 
 const STATUS_STYLES: Record<UseCaseStatus, string> = {
@@ -24,6 +25,7 @@ const STATUS_STYLES: Record<UseCaseStatus, string> = {
   approved: "bg-[var(--tier-low-bg)] text-[var(--tier-low)]",
   executing: "bg-[var(--tier-high-bg)] text-[var(--tier-high)]",
   executed: "bg-[var(--tier-low-bg)] text-[var(--tier-low)]",
+  rejected: "bg-[var(--tier-critical-bg)] text-[var(--tier-critical)]",
 };
 
 export default function PortfolioPage() {

@@ -2,7 +2,7 @@ import { auth } from "@/auth";
 import { canApproveArb, canToggleKillSwitch } from "@/lib/roles";
 import { hasActiveDelegation } from "@/lib/delegation";
 import { prisma } from "@/lib/prisma";
-import { toGate } from "@/lib/dbMapping";
+import { toGate, toUseCase } from "@/lib/dbMapping";
 import { broadcastBundle } from "@/lib/broadcastBundle";
 import { logAuditEntry } from "@/lib/audit";
 import { sendNotification } from "@/lib/notifications";
@@ -14,7 +14,9 @@ type GateActionBody =
   | { action: "toggle"; control: string }
   | { action: "finalize" }
   | { action: "approveArb" }
-  | { action: "attest" };
+  | { action: "attest" }
+  | { action: "reject"; reason: string }
+  | { action: "resubmit" };
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -153,6 +155,66 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     });
     await broadcastBundle(id);
     return Response.json({ gate: toGate(updated) });
+  }
+
+  if (body.action === "reject") {
+    if (!canApproveArb(session.user.role as UserRole) && !canToggleKillSwitch(session.user.role as UserRole)) {
+      return Response.json(
+        { error: "Only an ARB member, Governance Owner, or Admin can reject a use case." },
+        { status: 403 }
+      );
+    }
+    const reason = body.reason?.trim();
+    if (!reason) {
+      return Response.json({ error: "A reason is required to reject a use case." }, { status: 400 });
+    }
+    const updated = await prisma.useCase.update({ where: { id }, data: { status: "rejected" } });
+    await logAuditEntry({
+      useCaseId: id,
+      actorUserId: session.user.id,
+      actorName: session.user.name ?? "Unknown",
+      action: "use_case_rejected",
+      detail: reason,
+    });
+    await sendNotification({ kind: "use_case_rejected", useCaseTitle: updated.title, useCaseId: id, reason });
+    await broadcastBundle(id);
+    return Response.json({ useCase: toUseCase(updated) });
+  }
+
+  if (body.action === "resubmit") {
+    const useCase = await prisma.useCase.findUnique({ where: { id } });
+    if (!useCase) return Response.json({ error: "Use case not found." }, { status: 404 });
+    if (useCase.status !== "rejected") {
+      return Response.json({ error: "Only a rejected use case can be resubmitted." }, { status: 400 });
+    }
+    if (useCase.ownerUserId !== session.user.id && session.user.role !== "admin") {
+      return Response.json({ error: "Only the use case owner or an Admin can resubmit it." }, { status: 403 });
+    }
+    // Resubmitting sends this back through the gate from scratch - the prior
+    // rejection means whatever was previously acknowledged/approved no
+    // longer reflects a real sign-off, so it can't be left half-cleared.
+    const [updatedUseCase, updatedGate] = await prisma.$transaction([
+      prisma.useCase.update({ where: { id }, data: { status: "recommended" } }),
+      prisma.governanceGate.update({
+        where: { useCaseId: id },
+        data: {
+          acknowledged: false,
+          acknowledgedItems: [],
+          acknowledgedAt: null,
+          arbApproved: false,
+          arbApprovedBy: null,
+          arbApprovedAt: null,
+        },
+      }),
+    ]);
+    await logAuditEntry({
+      useCaseId: id,
+      actorUserId: session.user.id,
+      actorName: session.user.name ?? "Unknown",
+      action: "use_case_resubmitted",
+    });
+    await broadcastBundle(id);
+    return Response.json({ useCase: toUseCase(updatedUseCase), gate: toGate(updatedGate) });
   }
 
   return Response.json({ error: "Unknown action." }, { status: 400 });

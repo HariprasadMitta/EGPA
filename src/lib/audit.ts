@@ -16,7 +16,9 @@ export type AuditAction =
   | "stale_approval_escalated"
   | "material_change_reapproval"
   | "undeclared_tool_detected"
-  | "preflight_check_denied";
+  | "preflight_check_denied"
+  | "use_case_rejected"
+  | "use_case_resubmitted";
 
 // Real governance action audit trail - who changed what and when. Every
 // human-driven state change routes through this instead of only leaving

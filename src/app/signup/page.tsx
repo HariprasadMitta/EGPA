@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { ROLE_DESCRIPTIONS, ROLE_LABELS } from "@/lib/roles";
 import { UserRole } from "@/types";
@@ -10,7 +9,6 @@ import { UserRole } from "@/types";
 const ROLES: UserRole[] = ["requester", "steward", "governance-owner", "developer", "arb", "admin"];
 
 export default function SignupPage() {
-  const router = useRouter();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -61,7 +59,12 @@ export default function SignupPage() {
         return;
       }
 
-      router.push(role === "developer" || role === "arb" || role === "admin" ? "/portfolio" : "/intake");
+      // Hard navigation, not router.push: right after signIn() resolves,
+      // the session cookie is set but a client-side soft transition can
+      // race the proxy/middleware's read of it in production, silently
+      // bouncing back to this same page with no visible error. A full
+      // request always sees the cookie that was just committed.
+      window.location.href = role === "developer" || role === "arb" || role === "admin" ? "/portfolio" : "/intake";
     } finally {
       setSubmitting(false);
     }

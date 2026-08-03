@@ -60,6 +60,24 @@ model User {
   apiKeys       ApiKey[]
   delegationsGiven    ApprovalDelegation[] @relation("DelegatedBy")
   delegationsReceived ApprovalDelegation[] @relation("DelegatedTo")
+  passwordResetTokens PasswordResetToken[]
+}
+
+// Real forgot-password flow. No email-sending service is configured, so the
+// reset link is shown directly in-app after requesting it (a real, working
+// choice for this deployment, not how a customer-facing product handling
+// strangers' accounts would do it - documented as a known simplification).
+// Only the token's hash is ever stored, same discipline as every other
+// real token in this app (API keys, webhook triggers).
+model PasswordResetToken {
+  id         String    @id @default(cuid())
+  userId     String
+  tokenHash  String
+  expiresAt  DateTime
+  usedAt     DateTime?
+  createdAt  DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id])
 }
 
 // Real, audited approval delegation - a governance-owner or ARB member

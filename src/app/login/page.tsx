@@ -1,16 +1,25 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { getSession, signIn } from "next-auth/react";
+import { useAuth } from "@/lib/auth";
 
 export default function LoginPage() {
-  const router = useRouter();
+  const { user } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  // Already signed in (e.g. navigated back here manually, or a stale tab) -
+  // don't show a sign-in form for a session that already exists.
+  useEffect(() => {
+    if (!user) return;
+    window.location.href = user.role === "developer" || user.role === "arb" || user.role === "admin" ? "/portfolio" : "/intake";
+  }, [user]);
+
+  if (user) return null;
 
   async function handleSignIn() {
     setError(null);
@@ -34,7 +43,12 @@ export default function LoginPage() {
 
       const session = await getSession();
       const role = session?.user?.role;
-      router.push(role === "developer" || role === "arb" || role === "admin" ? "/portfolio" : "/intake");
+      // Hard navigation, not router.push: right after signIn() resolves,
+      // the session cookie is set but a client-side soft transition can
+      // race the proxy/middleware's read of it in production, silently
+      // bouncing back to this same page with no visible error. A full
+      // request always sees the cookie that was just committed.
+      window.location.href = role === "developer" || role === "arb" || role === "admin" ? "/portfolio" : "/intake";
     } finally {
       setSubmitting(false);
     }
@@ -57,7 +71,12 @@ export default function LoginPage() {
           className="mt-1 w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm"
         />
 
-        <label className="mt-4 block text-sm font-medium">Password</label>
+        <div className="mt-4 flex items-center justify-between">
+          <label className="block text-sm font-medium">Password</label>
+          <Link href="/forgot-password" className="text-xs font-medium text-[var(--brand)] hover:underline">
+            Forgot password?
+          </Link>
+        </div>
         <input
           type="password"
           value={password}
