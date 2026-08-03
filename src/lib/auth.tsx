@@ -15,7 +15,7 @@ interface AuthContextValue {
 export function useAuth(): AuthContextValue {
   const { data: session } = useSession();
   const user: AuthUser | null = session?.user
-    ? { name: session.user.name, role: session.user.role }
+    ? { id: session.user.id, name: session.user.name, role: session.user.role }
     : null;
 
   return {

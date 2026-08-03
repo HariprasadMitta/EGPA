@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth";
-import { canAccessDeveloperTools, ROLE_LABELS } from "@/lib/roles";
+import { canAccessDeveloperTools, canSeeAllUseCases, ROLE_LABELS } from "@/lib/roles";
 
 const CONTROL_PLANE_LINKS = [
   { href: "/guide", label: "Guide" },
@@ -24,6 +25,24 @@ export function NavBar() {
   const pathname = usePathname();
   const router = useRouter();
   const { user, logout } = useAuth();
+  const [inboxCount, setInboxCount] = useState<number | null>(null);
+
+  useEffect(() => {
+    // No reset-to-null on sign-out: the badge only renders inside the
+    // `user &&` block below, so a stale count is simply never shown once
+    // signed out - no need to trigger an extra render for it.
+    if (!user) return;
+    let cancelled = false;
+    fetch("/api/action-inbox")
+      .then((r) => r.json())
+      .then((d) => {
+        if (!cancelled) setInboxCount(d.items?.length ?? 0);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [user, pathname]);
 
   function handleSignOut() {
     logout();
@@ -71,6 +90,27 @@ export function NavBar() {
               className={pillClasses(pathname === "/mlops", "bg-[var(--accent)]")}
             >
               Model Builder
+            </Link>
+          )}
+          {user && (
+            <Link
+              href="/inbox"
+              className={`${pillClasses(pathname === "/inbox")} relative`}
+            >
+              Inbox
+              {inboxCount !== null && inboxCount > 0 && (
+                <span className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--brand-red)] px-1 text-[10px] font-bold text-white">
+                  {inboxCount}
+                </span>
+              )}
+            </Link>
+          )}
+          {user && canSeeAllUseCases(user.role) && (
+            <Link
+              href="/governance"
+              className={pillClasses(pathname === "/governance", "bg-[var(--brand-red)]")}
+            >
+              Governance
             </Link>
           )}
           {user && user.role === "admin" && (

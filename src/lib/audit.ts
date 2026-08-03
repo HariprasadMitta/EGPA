@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { computeEntryHash, GENESIS } from "@/lib/auditChain";
 
 export type AuditAction =
   | "kill_switch_engaged"
@@ -9,7 +10,13 @@ export type AuditAction =
   | "arb_approved"
   | "drift_detected"
   | "anomaly_detected"
-  | "comment_added";
+  | "comment_added"
+  | "recertification_attested"
+  | "arb_approval_needed"
+  | "stale_approval_escalated"
+  | "material_change_reapproval"
+  | "undeclared_tool_detected"
+  | "preflight_check_denied";
 
 // Real governance action audit trail - who changed what and when. Every
 // human-driven state change routes through this instead of only leaving
@@ -22,13 +29,25 @@ export async function logAuditEntry(input: {
   action: AuditAction;
   detail?: string;
 }): Promise<void> {
+  const previous = await prisma.auditLogEntry.findFirst({
+    where: { useCaseId: input.useCaseId },
+    orderBy: { createdAt: "desc" },
+    select: { hash: true },
+  });
+  const prevHash = previous?.hash || GENESIS;
+
+  const createdAt = new Date();
+  const fields = {
+    useCaseId: input.useCaseId,
+    actorUserId: input.actorUserId ?? null,
+    actorName: input.actorName,
+    action: input.action,
+    detail: input.detail ?? null,
+    createdAt,
+  };
+  const hash = computeEntryHash(prevHash, fields);
+
   await prisma.auditLogEntry.create({
-    data: {
-      useCaseId: input.useCaseId,
-      actorUserId: input.actorUserId ?? null,
-      actorName: input.actorName,
-      action: input.action,
-      detail: input.detail ?? null,
-    },
+    data: { ...fields, prevHash, hash },
   });
 }

@@ -25,7 +25,7 @@ interface StoreContextValue {
   active: UseCaseBundle | null;
   setActiveId: (id: string) => void;
   createUseCase: (
-    input: Omit<UseCase, "id" | "status" | "createdAt" | "killSwitchEngaged">,
+    input: Omit<UseCase, "id" | "status" | "createdAt" | "killSwitchEngaged" | "ownerUserId">,
     riskComplianceDetails?: Omit<RiskComplianceDetails, "useCaseId" | "createdAt">
   ) => Promise<UseCase>;
   toggleKillSwitch: (useCaseId: string, engaged: boolean) => Promise<void>;
@@ -33,6 +33,7 @@ interface StoreContextValue {
   acknowledgeGateItem: (useCaseId: string, control: string) => Promise<void>;
   finalizeGate: (useCaseId: string) => Promise<void>;
   approveArb: (useCaseId: string) => Promise<void>;
+  attestRecertification: (useCaseId: string) => Promise<string | null>;
   generateADR: (useCaseId: string) => Promise<void>;
   loadSample: (id: string) => void;
   startExecution: (
@@ -122,7 +123,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   const createUseCase = useCallback(
     async (
-      input: Omit<UseCase, "id" | "status" | "createdAt" | "killSwitchEngaged">,
+      input: Omit<UseCase, "id" | "status" | "createdAt" | "killSwitchEngaged" | "ownerUserId">,
       riskComplianceDetails?: Omit<RiskComplianceDetails, "useCaseId" | "createdAt">
     ): Promise<UseCase> => {
       const res = await fetch("/api/use-cases", {
@@ -249,6 +250,22 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       if (!existing) return prev;
       return { ...prev, [useCaseId]: { ...existing, gate: data.gate } };
     });
+  }, []);
+
+  const attestRecertification = useCallback(async (useCaseId: string): Promise<string | null> => {
+    const res = await fetch(`/api/use-cases/${useCaseId}/gate`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ action: "attest" }),
+    });
+    const data = await res.json();
+    if (!res.ok) return data.error ?? "Failed to attest.";
+    setBundlesMap((prev) => {
+      const existing = prev[useCaseId];
+      if (!existing) return prev;
+      return { ...prev, [useCaseId]: { ...existing, gate: data.gate } };
+    });
+    return null;
   }, []);
 
   const generateADR = useCallback(async (useCaseId: string) => {
@@ -405,6 +422,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       acknowledgeGateItem,
       finalizeGate,
       approveArb,
+      attestRecertification,
       generateADR,
       loadSample,
       startExecution,
@@ -423,6 +441,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       acknowledgeGateItem,
       finalizeGate,
       approveArb,
+      attestRecertification,
       generateADR,
       loadSample,
       startExecution,

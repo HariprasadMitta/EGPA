@@ -17,6 +17,7 @@ const useCase: UseCase = {
   status: "submitted",
   createdAt: "2026-01-01T00:00:00.000Z",
   killSwitchEngaged: false,
+  ownerUserId: "user-1",
 };
 
 const recommendation: Recommendation = {

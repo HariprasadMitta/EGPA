@@ -1,0 +1,4 @@
+.next
+.venv-litellm
+node_modules
+*.log

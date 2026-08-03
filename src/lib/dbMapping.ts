@@ -55,6 +55,7 @@ export function toUseCase(row: DbUseCase): UseCase {
     status: row.status as UseCaseStatus,
     createdAt: row.createdAt.toISOString(),
     killSwitchEngaged: row.killSwitchEngaged,
+    ownerUserId: row.ownerUserId,
   };
 }
 

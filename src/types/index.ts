@@ -50,6 +50,7 @@ export interface UseCase {
   status: UseCaseStatus;
   createdAt: string;
   killSwitchEngaged: boolean;
+  ownerUserId: string;
 }
 
 export interface Recommendation {
@@ -182,6 +183,7 @@ export interface UseCaseBundle {
 export type UserRole = "requester" | "steward" | "governance-owner" | "developer" | "arb" | "admin";
 
 export interface AuthUser {
+  id: string;
   name: string;
   role: UserRole;
 }

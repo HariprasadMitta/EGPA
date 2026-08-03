@@ -188,6 +188,12 @@ export default function ADRPage() {
         >
           Download .md
         </button>
+        <a
+          href={`/api/use-cases/${useCase.id}/evidence-export`}
+          className="rounded-full border border-[var(--border)] bg-[var(--surface)] px-4 py-2 text-sm font-semibold transition-colors hover:bg-[var(--background)]"
+        >
+          Download full audit evidence package
+        </a>
       </div>
 
       <pre className="mt-6 whitespace-pre-wrap rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6 font-mono text-xs leading-relaxed">

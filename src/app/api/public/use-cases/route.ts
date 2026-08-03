@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { authenticateApiKey } from "@/lib/apiKeyAuth";
+import { authenticateApiKey, requireWriteScope } from "@/lib/apiKeyAuth";
 import { classifyRisk } from "@/lib/governance";
 import { toUseCase } from "@/lib/dbMapping";
 import { broadcastBundle } from "@/lib/broadcastBundle";
@@ -44,6 +44,8 @@ interface PublicCreateBody {
 export async function POST(request: Request) {
   const auth = await authenticateApiKey(request);
   if (!auth.ok) return Response.json({ error: auth.error }, { status: auth.status });
+  const write = requireWriteScope(auth.scope);
+  if (!write.ok) return Response.json({ error: write.error }, { status: write.status });
 
   let body: PublicCreateBody;
   try {

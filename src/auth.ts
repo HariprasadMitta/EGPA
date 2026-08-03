@@ -6,6 +6,11 @@ import type { JWT } from "next-auth/jwt";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { UserRole } from "@/types";
+import { checkAuthRateLimit } from "@/lib/authRateLimit";
+import { clientIp } from "@/lib/rateLimit";
+
+const MAX_LOGIN_ATTEMPTS_PER_IP = 20;
+const MAX_LOGIN_ATTEMPTS_PER_EMAIL = 8;
 
 // Real SSO: Google OAuth via Auth.js, only registered when real credentials
 // are configured (GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET - see
@@ -18,10 +23,20 @@ const providers: Provider[] = [
       email: {},
       password: {},
     },
-    authorize: async (credentials) => {
+    authorize: async (credentials, request) => {
       const email = credentials?.email;
       const password = credentials?.password;
       if (typeof email !== "string" || typeof password !== "string") return null;
+
+      // Real brute-force protection, checked before the DB lookup/bcrypt
+      // compare so a flood of guesses against one account (or from one IP
+      // across many accounts) can't run the expensive path at all.
+      const ip = clientIp(request);
+      const [ipLimit, emailLimit] = await Promise.all([
+        checkAuthRateLimit("login-ip", ip, MAX_LOGIN_ATTEMPTS_PER_IP),
+        checkAuthRateLimit("login-email", email, MAX_LOGIN_ATTEMPTS_PER_EMAIL),
+      ]);
+      if (!ipLimit.allowed || !emailLimit.allowed) return null;
 
       const user = await prisma.user.findUnique({ where: { email } });
       // SSO-only accounts (created via Google, never given a local

@@ -47,10 +47,39 @@ model User {
   // src/lib/roles.ts's canSeeAllUseCases).
   businessUnit String?
 
+  // Real access recertification for elevated roles (governance-owner, arb,
+  // admin) - separate from use-case recertification. Null means never
+  // recertified since account creation; an admin explicitly re-confirming
+  // "this person still needs this access" sets it, same joiner-mover-leaver
+  // hygiene as any privileged-access review.
+  roleRecertifiedAt DateTime?
+
   useCases      UseCase[]
   comments      Comment[]
   auditLogEntries AuditLogEntry[]
   apiKeys       ApiKey[]
+  delegationsGiven    ApprovalDelegation[] @relation("DelegatedBy")
+  delegationsReceived ApprovalDelegation[] @relation("DelegatedTo")
+}
+
+// Real, audited approval delegation - a governance-owner or ARB member
+// going on leave can hand off their approval authority for a real time
+// window instead of the unofficial workaround (sharing credentials) that
+// this feature exists specifically to replace. delegatorUserId is always
+// the session user creating it - you can only delegate your own authority,
+// never someone else's. Enforcement lives in src/lib/delegation.ts.
+model ApprovalDelegation {
+  id              String   @id @default(cuid())
+  delegatorUserId String
+  delegateUserId  String
+  scope           String // "arb_approval" | "governance_owner_actions"
+  startsAt        DateTime
+  endsAt          DateTime
+  createdAt       DateTime @default(now())
+  revoked         Boolean  @default(false)
+
+  delegator User @relation("DelegatedBy", fields: [delegatorUserId], references: [id])
+  delegate  User @relation("DelegatedTo", fields: [delegateUserId], references: [id])
 }
 
 // Real basic multi-tenancy: an Organization owns its own Users/UseCases.
@@ -99,6 +128,29 @@ model UseCase {
   budget                 Budget?
   comments               Comment[]
   auditLogEntries        AuditLogEntry[]
+  actualUsageReports     ActualUsageReport[]
+}
+
+// Real declared-vs-actual reconciliation. Use cases run through this
+// platform's own execution engine can't actually drift from the declared
+// tool stack - startExecutionRun (src/lib/executionPersistence.ts) already
+// rejects any step outside Recommendation.tools before it runs, so
+// internal executions are preventively guaranteed to match, not just
+// checked after the fact. The real, still-open gap is an enterprise's own
+// production agent running in its own infrastructure, which this platform
+// has no preventive control over - this model lets that external system
+// report what it actually used via the public API, and the report is
+// reconciled against the declared stack for real, not fabricated, drift
+// detection.
+model ActualUsageReport {
+  id         String   @id @default(cuid())
+  useCaseId  String
+  source     String // "external-api" - internal executions don't need one, see comment above
+  toolsUsed  String[]
+  modelUsed  String?
+  reportedAt DateTime @default(now())
+
+  useCase UseCase @relation(fields: [useCaseId], references: [id])
 }
 
 model Recommendation {
@@ -292,6 +344,14 @@ model AuditLogEntry {
   detail      String?
   createdAt   DateTime @default(now())
 
+  // Real tamper-evident chain: prevHash is the previous entry's hash for
+  // this same use case ("GENESIS" for the first one), hash is
+  // SHA-256(prevHash + this row's own fields) - see src/lib/auditChain.ts.
+  // Editing any past entry breaks its own hash and every hash after it,
+  // which GET .../audit-log/verify actually recomputes and checks.
+  prevHash String @default("GENESIS")
+  hash     String @default("")
+
   useCase UseCase @relation(fields: [useCaseId], references: [id])
   actor   User?   @relation(fields: [actorUserId], references: [id])
 }
@@ -381,6 +441,8 @@ model ApiKey {
   id              String    @id @default(cuid())
   name            String
   keyHash         String
+  scope           String    @default("read-write")
+  expiresAt       DateTime?
   createdByUserId String
   createdAt       DateTime  @default(now())
   lastUsedAt      DateTime?

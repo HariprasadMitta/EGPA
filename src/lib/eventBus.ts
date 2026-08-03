@@ -1,5 +1,6 @@
 import Redis from "ioredis";
 import { UseCaseBundle } from "@/types";
+import { logError } from "@/lib/errorLogging";
 
 export interface UseCaseUpdateEvent {
   useCaseId: string;
@@ -64,8 +65,11 @@ export async function subscribeToUseCaseUpdates(
     if (channel !== CHANNEL) return;
     try {
       handler(JSON.parse(message) as UseCaseUpdateEvent);
-    } catch {
-      // Skip a malformed message rather than crash the subscription.
+    } catch (err) {
+      // Skip a malformed message rather than crash the subscription - but
+      // this should never actually happen (we control both ends), so it's
+      // worth knowing about if it ever does.
+      logError("eventBus.subscribeToUseCaseUpdates", err);
     }
   };
   subscriber.on("message", listener);

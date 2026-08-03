@@ -42,6 +42,11 @@ function makeBundle(params: {
     status: params.acknowledged ? "approved" : "gated",
     killSwitchEngaged: false,
     createdAt: params.createdAt,
+    // Sample bundles are client-only display data, never a real DB row -
+    // this sentinel just satisfies the type; no real account can match it,
+    // so the segregation-of-duties check (which compares against a real
+    // ownerUserId) never accidentally blocks a real ARB approval on samples.
+    ownerUserId: "sample-seed-owner",
   };
 
   const recommendation: Recommendation = {

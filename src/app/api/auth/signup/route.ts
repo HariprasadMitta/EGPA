@@ -1,8 +1,12 @@
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { UserRole } from "@/types";
+import { checkAuthRateLimit } from "@/lib/authRateLimit";
+import { clientIp } from "@/lib/rateLimit";
 
 export const runtime = "nodejs";
+
+const MAX_SIGNUPS_PER_IP_PER_WINDOW = 5;
 
 const VALID_ROLES: UserRole[] = [
   "requester",
@@ -23,6 +27,15 @@ interface SignupRequestBody {
 }
 
 export async function POST(request: Request) {
+  const ip = clientIp(request);
+  const ipLimit = await checkAuthRateLimit("signup-ip", ip, MAX_SIGNUPS_PER_IP_PER_WINDOW);
+  if (!ipLimit.allowed) {
+    return Response.json(
+      { error: "Too many accounts created from this network recently. Try again in 15 minutes." },
+      { status: 429 }
+    );
+  }
+
   let body: SignupRequestBody;
   try {
     body = await request.json();

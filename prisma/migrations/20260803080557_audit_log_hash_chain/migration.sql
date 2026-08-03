@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "AuditLogEntry" ADD COLUMN     "hash" TEXT NOT NULL DEFAULT '',
+ADD COLUMN     "prevHash" TEXT NOT NULL DEFAULT 'GENESIS';

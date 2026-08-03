@@ -1,5 +1,6 @@
 import { auth } from "@/auth";
-import { canApproveArb } from "@/lib/roles";
+import { canApproveArb, canToggleKillSwitch } from "@/lib/roles";
+import { hasActiveDelegation } from "@/lib/delegation";
 import { prisma } from "@/lib/prisma";
 import { toGate } from "@/lib/dbMapping";
 import { broadcastBundle } from "@/lib/broadcastBundle";
@@ -12,7 +13,8 @@ export const runtime = "nodejs";
 type GateActionBody =
   | { action: "toggle"; control: string }
   | { action: "finalize" }
-  | { action: "approveArb" };
+  | { action: "approveArb" }
+  | { action: "attest" };
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -63,6 +65,16 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
           useCaseTitle: useCase?.title ?? id,
           useCaseId: id,
         });
+        // Real timestamped record of "when did this first get stuck waiting
+        // on ARB" - the only place that's actually recorded, since nothing
+        // else stores a "pending since" moment. Used by the stale-approval
+        // escalation job (src/app/api/admin/escalate-stale-approvals) to
+        // compute real days-pending, not an estimate.
+        await logAuditEntry({
+          useCaseId: id,
+          actorName: "System",
+          action: "arb_approval_needed",
+        });
       }
       return Response.json({ gate: toGate(gate) });
     }
@@ -81,14 +93,28 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   }
 
   if (body.action === "approveArb") {
-    if (!canApproveArb(session.user.role as UserRole)) {
-      return Response.json({ error: "Only an ARB member or Admin can approve this." }, { status: 403 });
+    const delegated = await hasActiveDelegation(session.user.id, "arb_approval");
+    if (!canApproveArb(session.user.role as UserRole) && !delegated) {
+      return Response.json({ error: "Only an ARB member, Admin, or someone with an active ARB delegation can approve this." }, { status: 403 });
+    }
+    // Real segregation of duties: the account that owns this use case can't
+    // also be the one clearing its ARB sign-off, even if they happen to
+    // hold the arb/admin role too - a classic first-week audit finding if
+    // left unenforced. Checked against the real ownerUserId (the account
+    // that submitted it), not the free-text owner/steward display names,
+    // which can't be reliably matched back to an account.
+    const useCase = await prisma.useCase.findUnique({ where: { id }, select: { ownerUserId: true } });
+    if (useCase?.ownerUserId === session.user.id) {
+      return Response.json(
+        { error: "You own this use case and can't also approve its own ARB sign-off - segregation of duties requires a different approver." },
+        { status: 403 }
+      );
     }
     const updated = await prisma.governanceGate.update({
       where: { useCaseId: id },
       data: {
         arbApproved: true,
-        arbApprovedBy: session.user.name,
+        arbApprovedBy: delegated ? `${session.user.name} (via delegation)` : session.user.name,
         arbApprovedAt: new Date(),
       },
     });
@@ -97,6 +123,33 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       actorUserId: session.user.id,
       actorName: session.user.name ?? "Unknown",
       action: "arb_approved",
+    });
+    await broadcastBundle(id);
+    return Response.json({ gate: toGate(updated) });
+  }
+
+  if (body.action === "attest") {
+    const delegatedAttest = await hasActiveDelegation(session.user.id, "governance_owner_actions");
+    if (!canToggleKillSwitch(session.user.role as UserRole) && !delegatedAttest) {
+      return Response.json({ error: "Only a Governance Owner, Admin, or someone with an active delegation can attest recertification." }, { status: 403 });
+    }
+    if (!gate.acknowledged) {
+      return Response.json({ error: "This use case's gate hasn't been acknowledged yet - nothing to re-attest." }, { status: 400 });
+    }
+    // Real, distinct action from the original sign-off: confirms "this still
+    // matches production" and resets the recertification clock
+    // (acknowledgedAt), without silently re-running the original checklist
+    // toggle-by-toggle or touching ARB approval state.
+    const updated = await prisma.governanceGate.update({
+      where: { useCaseId: id },
+      data: { acknowledgedAt: new Date() },
+    });
+    await logAuditEntry({
+      useCaseId: id,
+      actorUserId: session.user.id,
+      actorName: session.user.name ?? "Unknown",
+      action: "recertification_attested",
+      detail: "Confirmed this use case's implementation still matches its governance sign-off.",
     });
     await broadcastBundle(id);
     return Response.json({ gate: toGate(updated) });
