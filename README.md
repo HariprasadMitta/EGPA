@@ -7,8 +7,7 @@ Decision Record, and — for approved use cases — a real multi-agent
 execution with full audit lineage, running through a real self-hosted AI
 Gateway.
 
-Built as a portfolio/interview demo for an Enterprise AI Architect role at
-Momentum (a South African financial services company) — enforced
+Built as a portfolio demo — enforced
 architecture, not optional policy, for an organization with federated
 business units. What started as a front-end-only demo was rebuilt,
 incrementally, into a genuinely working system: a real database, real
