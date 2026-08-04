@@ -18,7 +18,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Momentum-LOC AI CV - Centralized View",
+  title: "EGPA - Enterprise Governance Platform for AI",
   description:
     "Submit an AI/agentic use case and get a governed, explainable architecture recommendation, then execute and monitor it from one centralized view.",
 };

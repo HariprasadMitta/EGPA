@@ -60,7 +60,7 @@ export async function POST(request: Request) {
   // API-key-created use cases attach to the demo/seed account (there's no
   // real "which human submitted this" for a programmatic caller) - the
   // same real placeholder ownerUserId pattern the seed data already uses.
-  const seedOwner = await prisma.user.findFirst({ where: { email: "demo@momentum.local" } });
+  const seedOwner = await prisma.user.findFirst({ where: { email: "demo@egpa.local" } });
   if (!seedOwner) return Response.json({ error: "No default owner account available." }, { status: 500 });
 
   const riskTier = classifyRisk({

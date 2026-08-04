@@ -10,7 +10,7 @@ import {
   IntegrationSurface,
 } from "@/types";
 
-export const INTAKE_DRAFT_KEY = "momentum-intake-draft-v1";
+export const INTAKE_DRAFT_KEY = "egpa-intake-draft-v1";
 
 export interface IntakeDraft {
   title: string;

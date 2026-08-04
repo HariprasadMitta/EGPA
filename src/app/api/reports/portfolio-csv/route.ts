@@ -62,7 +62,7 @@ export async function GET() {
   return new Response(csv, {
     headers: {
       "content-type": "text/csv",
-      "content-disposition": `attachment; filename="momentum-portfolio-report-${new Date().toISOString().slice(0, 10)}.csv"`,
+      "content-disposition": `attachment; filename="egpa-portfolio-report-${new Date().toISOString().slice(0, 10)}.csv"`,
     },
   });
 }

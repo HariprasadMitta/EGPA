@@ -34,7 +34,7 @@ async function main() {
   for (const template of Object.values(GOVERNANCE_TEMPLATES)) {
     documents.push({
       id: `gov-${template.riskTier.toLowerCase()}`,
-      text: `Momentum AI Governance Policy - ${template.riskTier} risk tier (template v${template.version}). Required approvals: ${template.requiredApprovals.join(", ")}. Required controls: ${template.requiredControls.join(", ")}. Human-in-the-loop tier: ${template.hitlTier}. ${
+      text: `EGPA AI Governance Policy - ${template.riskTier} risk tier (template v${template.version}). Required approvals: ${template.requiredApprovals.join(", ")}. Required controls: ${template.requiredControls.join(", ")}. Human-in-the-loop tier: ${template.hitlTier}. ${
         template.recertificationDays
           ? `Recertification required every ${template.recertificationDays} days.`
           : "No recertification required at this tier."

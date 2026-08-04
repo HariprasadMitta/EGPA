@@ -57,9 +57,9 @@ export function NavBar() {
             M
           </span>
           <span className="flex flex-col leading-tight">
-            <span>Momentum-LOC AI CV</span>
+            <span>EGPA</span>
             <span className="hidden text-[10px] font-normal uppercase tracking-wide text-[var(--muted)] sm:inline">
-              Centralized View
+              Enterprise Governance Platform for AI
             </span>
           </span>
         </Link>

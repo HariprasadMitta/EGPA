@@ -113,7 +113,7 @@ it's honest in a live demo if asked.
    explainability log, loop behavior, context usage, drift, cost-vs-value.
 8. **(Optional, if time allows) Use Case Portfolio** — a list view of all
    submitted use cases across the org with their risk tier and status, to
-   sell the "enterprise-wide visibility" story Momentum specifically asked
+   sell the "enterprise-wide visibility" story that was specifically asked
    for.
 
 ## 4a. Control Plane vs. AI Gateway — keep these conceptually separate

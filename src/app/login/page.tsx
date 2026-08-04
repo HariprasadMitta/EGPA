@@ -56,7 +56,7 @@ export default function LoginPage() {
 
   return (
     <div className="mx-auto max-w-2xl px-6 py-14">
-      <h1 className="text-2xl font-bold text-[var(--brand-strong)]">Sign in to Momentum-LOC AI CV</h1>
+      <h1 className="text-2xl font-bold text-[var(--brand-strong)]">Sign in to EGPA</h1>
       <p className="mt-2 text-sm text-[var(--muted)]">
         Real sign-in - your account and role are looked up from the database.
       </p>

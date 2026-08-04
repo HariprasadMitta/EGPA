@@ -28,7 +28,7 @@ export default function LandingPage() {
               recommendation in minutes.
             </h1>
             <p className="mt-5 text-lg text-white/80">
-              Enforced, not optional. Momentum computes a risk tier from your use
+              Enforced, not optional. EGPA computes a risk tier from your use
               case, recommends a concrete agent framework and tool stack, and
               blocks progress until the required governance controls for that
               tier are satisfied &mdash; with a full decision record every time.
@@ -146,7 +146,7 @@ export default function LandingPage() {
               Control Plane vs. AI Gateway
             </h3>
             <p className="mt-2 text-sm text-[var(--muted)]">
-              Think of it as two layers with two different jobs. Momentum{" "}
+              Think of it as two layers with two different jobs. EGPA{" "}
               <strong>is</strong>
               {" "}the Control Plane: it&apos;s where policy
               becomes code &mdash; risk templates, approval workflows, the
@@ -155,7 +155,7 @@ export default function LandingPage() {
               organization that can&apos;t rely on tribal knowledge to enforce
               that. The Gateway is the separate data-plane layer underneath
               it &mdash; the thing that actually routes every live LLM call.
-              Momentum configures and observes the Gateway; it doesn&apos;t
+              EGPA configures and observes the Gateway; it doesn&apos;t
               sit in that traffic path itself.
             </p>
           </div>

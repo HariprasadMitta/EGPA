@@ -96,7 +96,7 @@ function buildTeamsPayload(summary: NotificationSummary, origin: string) {
     summary: summary.title,
     themeColor: "0A2A43",
     title: summary.title,
-    text: `${summary.text}\n\n[Open in Momentum-LOC AI CV](${origin}${summary.path})`,
+    text: `${summary.text}\n\n[Open in EGPA](${origin}${summary.path})`,
   };
 }
 
@@ -104,7 +104,7 @@ function buildTeamsPayload(summary: NotificationSummary, origin: string) {
 // a human-readable sentence) so a customer's own automation - Power
 // Automate, a ServiceNow inbound webhook, Jira's webhook-triggered
 // automation, or anything else - can parse real fields and route this
-// into whatever system of record they actually use, without Momentum-LOC
+// into whatever system of record they actually use, without EGPA
 // needing to integrate with any one vendor's specific API directly.
 function buildGenericWebhookPayload(event: NotificationEvent, summary: NotificationSummary, origin: string) {
   return {

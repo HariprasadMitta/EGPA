@@ -18,7 +18,7 @@ import {
   UseCaseBundle,
 } from "@/types";
 
-const ACTIVE_ID_KEY = "momentum-control-plane-active-id-v1";
+const ACTIVE_ID_KEY = "egpa-control-plane-active-id-v1";
 
 interface StoreContextValue {
   bundles: UseCaseBundle[];

@@ -17,10 +17,10 @@ async function main() {
   // so seeded UseCases have something to point ownerUserId at.
   const passwordHash = await bcrypt.hash("demo-seed-account-not-a-real-login", 10);
   const demoUser = await prisma.user.upsert({
-    where: { email: "demo@momentum.local" },
+    where: { email: "demo@egpa.local" },
     update: {},
     create: {
-      email: "demo@momentum.local",
+      email: "demo@egpa.local",
       passwordHash,
       name: "Demo Seed Account",
       role: "admin",

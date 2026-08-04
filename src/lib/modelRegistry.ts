@@ -111,7 +111,7 @@ export const MCP_SERVERS: MCPServerEntry[] = [
   {
     id: "mcp-internal-data",
     name: "Internal Data Platform MCP Server",
-    publisher: "Momentum (internal)",
+    publisher: "EGPA (internal)",
     description: "In-house server exposing approved internal data sources as governed MCP tools.",
     status: "under-review",
     allowedRiskTiers: ["Low"],
@@ -119,7 +119,7 @@ export const MCP_SERVERS: MCPServerEntry[] = [
   {
     id: "mcp-legacy-soap",
     name: "Legacy SOAP Bridge MCP Server",
-    publisher: "Momentum (internal)",
+    publisher: "EGPA (internal)",
     description: "Deprecated wrapper around a retired SOAP integration layer.",
     status: "deprecated",
     allowedRiskTiers: [],

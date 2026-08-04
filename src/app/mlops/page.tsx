@@ -14,7 +14,7 @@ import {
 } from "@/lib/mlopsModels";
 import { RagChunk } from "@/types";
 
-const OR_VERIFIER_KEY = "momentum-cv-openrouter-pkce-verifier";
+const OR_VERIFIER_KEY = "egpa-cv-openrouter-pkce-verifier";
 
 function PingBadge({ ping, busy }: { ping: { ok: boolean; latencyMs: number; checkedAt: string; message?: string } | null; busy: boolean }) {
   if (busy) return <span className="text-xs text-[var(--muted)]">Pinging...</span>;

@@ -1,7 +1,7 @@
-# Momentum-LOC AI CV — Centralized View
+# EGPA — Enterprise Governance Platform for AI
 
 An enterprise AI governance & control-plane platform, live in production at
-[momentum-loc-aicv.vercel.app](https://momentum-loc-aicv.vercel.app). Submit
+a private production deployment. Submit
 an AI/agentic use case, get a computed risk tier, a real LLM-generated
 architecture recommendation, an enforced governance gate (with real ARB
 sign-off and segregation of duties), an auto-generated Architecture Decision
@@ -46,7 +46,7 @@ just this file.
 
 ## How to use it
 
-**Live now:** [momentum-loc-aicv.vercel.app](https://momentum-loc-aicv.vercel.app)
+**Live now:** private deployment - access is restricted while this project is under a naming/branding review; ask the repo owner for a link.
 
 **As a visitor:** sign up (pick any role — Admin gives full access), then
 walk the pipeline: Intake → Risk & Compliance Profile → Recommendation →
@@ -131,7 +131,7 @@ and committed before the next started.
   real integration (a real wire-transfer system, a real ticketing API, etc.)
   is deliberately out of scope — that's the org's own engineering work,
   informed by the ADR this platform produces.
-- **Momentum's own execution engine is a validation sandbox, not a
+- **EGPA's own execution engine is a validation sandbox, not a
   production host** — it runs a real LLM against a real Gateway, but its
   only real callable tool is an internal knowledge-base search. It's for
   validating the recommended pattern and governance behavior, not for

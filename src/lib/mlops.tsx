@@ -16,7 +16,7 @@ import {
   RagChunk,
 } from "@/types";
 
-const STORAGE_KEY = "momentum-cv-mlops-v1";
+const STORAGE_KEY = "egpa-cv-mlops-v1";
 
 interface MlOpsState {
   openRouter: OpenRouterConnection;
