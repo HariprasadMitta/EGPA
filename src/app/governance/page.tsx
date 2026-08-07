@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth";
 import { canSeeAllUseCases } from "@/lib/roles";
+import { StatTile, HorizontalBarChart } from "@/components/charts";
+import { formatHours } from "@/lib/timeSaved";
 
 interface PostureData {
   criticalArbApproval: { total: number; approved: number };
@@ -175,6 +177,106 @@ function DelegationsSection({ role }: { role: string }) {
   );
 }
 
+interface BusinessValueData {
+  timeSaved: { totalHoursSaved: number; useCasesCounted: number };
+  costSaved: { totalCostSavedUsd: number; useCasesCounted: number };
+  modelAdoption: { entries: { provider: string; useCaseCount: number }[]; reusedModelCount: number };
+  complianceExposureCaught: {
+    piiDetections: number;
+    undeclaredToolIncidents: number;
+    preflightDenials: number;
+    killSwitchEngagements: number;
+    total: number;
+  };
+  cycleTimeToProduction: { averageHours: number | null; useCasesCounted: number };
+  totalUseCasesTracked: number;
+}
+
+function BusinessValueSection() {
+  const [data, setData] = useState<BusinessValueData | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/business-value")
+      .then(async (r) => {
+        const body = await r.json();
+        if (!r.ok) throw new Error(body.error || "Failed to load.");
+        return body as BusinessValueData;
+      })
+      .then(setData)
+      .catch((e) => setError(e.message));
+  }, []);
+
+  return (
+    <div className="mt-10 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6">
+      <h2 className="text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">Business value</h2>
+      <p className="mt-1 text-xs text-[var(--muted)]">
+        Real, computed evidence of what governing through this platform is worth &mdash; not projections.
+        Time and cost saved compare against an honest, admin-declared baseline (see Admin &rarr; Governance
+        baseline); everything else is counted directly from the audit trail.
+      </p>
+
+      {error && <p className="mt-4 text-sm text-[var(--tier-critical)]">{error}</p>}
+      {!data && !error && <p className="mt-4 text-sm text-[var(--muted)]">Loading real business-value data...</p>}
+
+      {data && (
+        <>
+          <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <StatTile
+              label="Approval time saved"
+              value={data.timeSaved.useCasesCounted > 0 ? formatHours(data.timeSaved.totalHoursSaved) : "-"}
+              sub={`across ${data.timeSaved.useCasesCounted} use case(s) with a set baseline`}
+            />
+            <StatTile
+              label="Delivery cost saved"
+              value={data.costSaved.useCasesCounted > 0 ? `$${data.costSaved.totalCostSavedUsd.toFixed(2)}` : "-"}
+              sub={`across ${data.costSaved.useCasesCounted} use case(s) with a declared cost/hour`}
+            />
+            <StatTile
+              label="Cycle time to production"
+              value={data.cycleTimeToProduction.averageHours != null ? formatHours(data.cycleTimeToProduction.averageHours) : "-"}
+              sub={`avg. Intake -> first completed execution, ${data.cycleTimeToProduction.useCasesCounted} use case(s)`}
+            />
+            <StatTile
+              label="Models reused across use cases"
+              value={String(data.modelAdoption.reusedModelCount)}
+              sub={`of ${data.modelAdoption.entries.length} distinct model(s) actually used`}
+            />
+          </div>
+
+          <div className="mt-6 grid gap-4 lg:grid-cols-2">
+            <div>
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
+                Compliance exposure caught (total: {data.complianceExposureCaught.total})
+              </h3>
+              <div className="mt-3">
+                <HorizontalBarChart
+                  data={[
+                    { label: "PII detections", value: data.complianceExposureCaught.piiDetections },
+                    { label: "Undeclared-tool incidents", value: data.complianceExposureCaught.undeclaredToolIncidents },
+                    { label: "Preflight denials", value: data.complianceExposureCaught.preflightDenials },
+                    { label: "Kill-switch engagements", value: data.complianceExposureCaught.killSwitchEngagements },
+                  ]}
+                />
+              </div>
+            </div>
+            <div>
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
+                Model Registry adoption (distinct use cases per model actually used)
+              </h3>
+              <div className="mt-3">
+                <HorizontalBarChart
+                  data={data.modelAdoption.entries.map((e) => ({ label: e.provider, value: e.useCaseCount }))}
+                />
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 function StatCard({
   label,
   value,
@@ -299,6 +401,8 @@ export default function GovernancePosturePage() {
         records the per-use-case pages already show — this page only aggregates, it doesn&apos;t introduce a
         second source of truth.
       </p>
+
+      <BusinessValueSection />
 
       <DelegationsSection role={user.role} />
     </div>
