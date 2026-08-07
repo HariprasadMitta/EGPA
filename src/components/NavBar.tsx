@@ -54,7 +54,7 @@ export function NavBar() {
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-6 px-6 py-4">
         <Link href="/" className="flex items-center gap-2.5 font-semibold text-[var(--brand-strong)]">
           <span className="flex h-9 w-9 flex-none items-center justify-center rounded-full bg-[var(--brand-red)] text-sm font-bold text-white">
-            M
+            E
           </span>
           <span className="flex flex-col leading-tight">
             <span>EGPA</span>
