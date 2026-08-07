@@ -63,6 +63,7 @@ export interface Recommendation {
   iterationCeiling: number;
   contextStrategy: string;
   rationale: string;
+  alternativesConsidered: string | null;
   createdAt: string;
   version: number;
 }
@@ -90,6 +91,7 @@ export interface GovernanceGate {
   arbApproved: boolean;
   arbApprovedBy: string | null;
   arbApprovedAt: string | null;
+  arbApprovalReasoning: string | null;
 }
 
 export interface AuditLogEntry {
@@ -163,6 +165,7 @@ export interface ModelRegistryEntry {
   version: string;
   status: ModelStatus;
   allowedRiskTiers: RiskTier[];
+  changeReason: string | null;
 }
 
 export interface WebhookTriggerInfo {

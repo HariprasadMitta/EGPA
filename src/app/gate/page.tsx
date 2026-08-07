@@ -481,6 +481,45 @@ function GovernanceHistoryPanel({ useCaseId }: { useCaseId: string }) {
   );
 }
 
+function ArbApprovalPanel({ useCaseId, approverName }: { useCaseId: string; approverName: string }) {
+  const { approveArb } = useStore();
+  const [reasoning, setReasoning] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleApprove() {
+    if (reasoning.trim().length < 15) {
+      setError("State why this Critical-tier use case is acceptable (at least 15 characters) before approving - not just that it's approved.");
+      return;
+    }
+    setSubmitting(true);
+    setError(null);
+    const err = await approveArb(useCaseId, reasoning.trim());
+    setSubmitting(false);
+    if (err) setError(err);
+  }
+
+  return (
+    <div className="mt-4 space-y-3">
+      <textarea
+        value={reasoning}
+        onChange={(e) => setReasoning(e.target.value)}
+        placeholder="Reasoning for this sign-off - what makes this Critical-tier use case's risk acceptable, referencing its controls or blast radius. Shown on the ADR and recorded in the audit trail."
+        rows={3}
+        className="w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm"
+      />
+      <button
+        onClick={handleApprove}
+        disabled={submitting}
+        className="rounded-full bg-[var(--brand)] px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-[var(--brand-strong)] disabled:opacity-60"
+      >
+        {submitting ? "Approving..." : `Approve as ${approverName}`}
+      </button>
+      {error && <p className="text-xs text-[var(--tier-critical)]">{error}</p>}
+    </div>
+  );
+}
+
 function RejectPanel({ useCaseId, canReject }: { useCaseId: string; canReject: boolean }) {
   const { rejectUseCase } = useStore();
   const [open, setOpen] = useState(false);
@@ -491,8 +530,8 @@ function RejectPanel({ useCaseId, canReject }: { useCaseId: string; canReject: b
   if (!canReject) return null;
 
   async function handleReject() {
-    if (!reason.trim()) {
-      setError("Enter a reason for rejecting this use case.");
+    if (reason.trim().length < 15) {
+      setError("Enter a real reason for rejecting this use case (at least 15 characters) - it's shown to the owner and recorded in the audit trail.");
       return;
     }
     setSubmitting(true);
@@ -696,7 +735,7 @@ function CommentsThread({ useCaseId }: { useCaseId: string }) {
 export default function GatePage() {
   const router = useRouter();
   const { user } = useAuth();
-  const { active, acknowledgeGateItem, finalizeGate, approveArb, toggleKillSwitch } = useStore();
+  const { active, acknowledgeGateItem, finalizeGate, toggleKillSwitch } = useStore();
 
   if (!active || !active.gate) {
     return (
@@ -732,10 +771,6 @@ export default function GatePage() {
     router.push("/adr");
   }
 
-  function handleArbApprove() {
-    if (!user) return;
-    approveArb(useCase.id);
-  }
 
   function handleToggleKillSwitch() {
     toggleKillSwitch(useCase.id, !useCase.killSwitchEngaged);
@@ -827,13 +862,20 @@ export default function GatePage() {
           </div>
 
           {gate.arbApproved ? (
-            <p className="mt-2 text-sm text-[var(--status-done)]">
-              Approved by <strong>{gate.arbApprovedBy}</strong>
-              {gate.arbApprovedAt && (
-                <> on {new Date(gate.arbApprovedAt).toLocaleString("en-US")}</>
+            <>
+              <p className="mt-2 text-sm text-[var(--status-done)]">
+                Approved by <strong>{gate.arbApprovedBy}</strong>
+                {gate.arbApprovedAt && (
+                  <> on {new Date(gate.arbApprovedAt).toLocaleString("en-US")}</>
+                )}
+                .
+              </p>
+              {gate.arbApprovalReasoning && (
+                <p className="mt-2 text-sm">
+                  <span className="font-semibold">Reasoning:</span> {gate.arbApprovalReasoning}
+                </p>
               )}
-              .
-            </p>
+            </>
           ) : isArb && user?.id === useCase.ownerUserId ? (
             <p className="mt-2 text-sm text-[var(--tier-medium)]">
               You submitted this use case, so you can&apos;t also clear its ARB sign-off &mdash;
@@ -847,12 +889,7 @@ export default function GatePage() {
                 Architecture Review Board before it can proceed &mdash; sign
                 off manually below.
               </p>
-              <button
-                onClick={handleArbApprove}
-                className="mt-4 rounded-full bg-[var(--brand)] px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-[var(--brand-strong)]"
-              >
-                Approve as {user?.name}
-              </button>
+              <ArbApprovalPanel useCaseId={useCase.id} approverName={user?.name ?? ""} />
             </>
           ) : (
             <p className="mt-2 text-sm text-[var(--muted)]">

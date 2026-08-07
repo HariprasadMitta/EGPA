@@ -1,5 +1,9 @@
 import { MCPServerEntry, ModelRegistryEntry } from "@/types";
 
+// One-time seed source for the real DB-backed Model Registry
+// (prisma/seed.ts) - not read by the running app itself, which reads
+// ModelRegistryEntry/McpServerEntry straight from the database
+// (src/app/api/admin/model-registry, src/app/api/admin/mcp-servers).
 export const MODEL_REGISTRY: ModelRegistryEntry[] = [
   {
     id: "claude-sonnet-4-6",
@@ -8,6 +12,7 @@ export const MODEL_REGISTRY: ModelRegistryEntry[] = [
     version: "4.6",
     status: "approved",
     allowedRiskTiers: ["Low", "Medium", "High", "Critical"],
+    changeReason: "Vendor's flagship general-purpose model with the strongest track record on Critical-tier use cases in this org's own past executions - approved for every risk tier.",
   },
   {
     id: "claude-opus-4-6",
@@ -16,6 +21,7 @@ export const MODEL_REGISTRY: ModelRegistryEntry[] = [
     version: "4.6",
     status: "approved",
     allowedRiskTiers: ["Low", "Medium", "High", "Critical"],
+    changeReason: "Highest-capability tier for the hardest reasoning steps; approved everywhere given the same vendor security review already covering Sonnet.",
   },
   {
     id: "claude-haiku-4-5",
@@ -24,6 +30,7 @@ export const MODEL_REGISTRY: ModelRegistryEntry[] = [
     version: "4.5",
     status: "approved",
     allowedRiskTiers: ["Low", "Medium"],
+    changeReason: "Fast/cheap tier appropriate for high-volume, low-stakes steps; capped at Medium since it hasn't been validated on Critical-tier reasoning patterns.",
   },
   {
     id: "gpt-4o",
@@ -32,6 +39,7 @@ export const MODEL_REGISTRY: ModelRegistryEntry[] = [
     version: "2024-11",
     status: "approved",
     allowedRiskTiers: ["Low", "Medium", "High"],
+    changeReason: "Second real fallback provider so the platform isn't single-vendor; not yet extended to Critical pending a dedicated security review for that tier.",
   },
   {
     id: "gpt-4o-mini",
@@ -40,6 +48,7 @@ export const MODEL_REGISTRY: ModelRegistryEntry[] = [
     version: "2024-11",
     status: "approved",
     allowedRiskTiers: ["Low", "Medium"],
+    changeReason: "Cheap fallback tier mirroring Haiku's scope for the same reason - capped at Medium.",
   },
   {
     id: "gemini-1-5-pro",
@@ -48,6 +57,7 @@ export const MODEL_REGISTRY: ModelRegistryEntry[] = [
     version: "1.5",
     status: "under-review",
     allowedRiskTiers: ["Low", "Medium"],
+    changeReason: "Candidate third provider for redundancy - held at under-review until its own data-handling terms are checked against the same bar Anthropic/OpenAI already cleared.",
   },
   {
     id: "llama-3-1-405b",
@@ -56,6 +66,7 @@ export const MODEL_REGISTRY: ModelRegistryEntry[] = [
     version: "3.1",
     status: "under-review",
     allowedRiskTiers: ["Low"],
+    changeReason: "Self-hosted option evaluated for data-residency-sensitive use cases; restricted to Low tier only until self-hosted infra has its own security review.",
   },
   {
     id: "claude-2-1",
@@ -64,6 +75,7 @@ export const MODEL_REGISTRY: ModelRegistryEntry[] = [
     version: "2.1",
     status: "deprecated",
     allowedRiskTiers: [],
+    changeReason: "Superseded by Claude Sonnet/Opus 4.6 on every real metric this platform tracks (cost, latency, quality) - no use case should still declare this.",
   },
   {
     id: "gpt-3-5-turbo",
@@ -72,6 +84,7 @@ export const MODEL_REGISTRY: ModelRegistryEntry[] = [
     version: "0125",
     status: "deprecated",
     allowedRiskTiers: [],
+    changeReason: "Superseded by GPT-4o/4o-mini on every real metric this platform tracks - no use case should still declare this.",
   },
 ];
 

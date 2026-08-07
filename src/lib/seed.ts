@@ -69,6 +69,10 @@ function makeBundle(params: {
     arbApprovedBy:
       params.acknowledged && template.requiresArbApproval ? "Pre-approved (seed data)" : null,
     arbApprovedAt: params.acknowledged && template.requiresArbApproval ? params.createdAt : null,
+    arbApprovalReasoning:
+      params.acknowledged && template.requiresArbApproval
+        ? "Pre-approved seed data - reasoning not applicable to a sample bundle."
+        : null,
   };
 
   const riskComplianceDetails: RiskComplianceDetails = {
@@ -124,6 +128,8 @@ export const SAMPLE_BUNDLES: UseCaseBundle[] = [
       contextStrategy: "Sliding window with tool-result summarization",
       rationale:
         "Medium risk tier permits a supervised multi-step pipeline, but confidential customer data means each drafted response still needs a human check before it goes out. LangGraph's explicit state graph makes the classify -> draft -> route flow auditable, and a worker-per-channel pattern keeps the email/chat/form parsers isolated from the routing logic.",
+      alternativesConsidered:
+        "A single-agent ReAct loop was considered but rejected - one model juggling classification, drafting, and routing in one context makes the per-response human checkpoint harder to place cleanly. AutoGen's conversational multi-agent pattern was also considered but passed over: this workflow is a fixed pipeline, not an open-ended discussion, so LangGraph's explicit graph is a better fit than AutoGen's conversation-driven control flow.",
     },
     riskComplianceDetails: {
       regulatoryFrameworks: ["POPIA", "FSCA Conduct Standards"],
@@ -181,6 +187,8 @@ export const SAMPLE_BUNDLES: UseCaseBundle[] = [
       contextStrategy: "Full context per ticket, no cross-ticket carryover",
       rationale:
         "The combination of fully-autonomous intent and a safety-adjacent blast radius (network changes across business units) computes to Critical, so the harness must hard-block autonomous writes behind a manual approval gate regardless of the model's own confidence. A tight iteration ceiling limits runaway correlation loops on ambiguous tickets.",
+      alternativesConsidered:
+        "A supervisor + worker sub-agent pattern (as used for complaint triage) was considered but rejected here - splitting correlation and change-ticket-writing across separate sub-agents would obscure exactly which step decided to write, weakening the auditability this Critical-tier use case needs. Fully autonomous writes with only post-hoc review were also considered and rejected outright - the safety-adjacent blast radius requires the approval gate to sit before the write, not after it.",
     },
     riskComplianceDetails: {
       regulatoryFrameworks: ["FSCA Conduct Standards", "SARB/Basel"],
@@ -237,6 +245,8 @@ export const SAMPLE_BUNDLES: UseCaseBundle[] = [
       contextStrategy: "Full context, no compaction needed",
       rationale:
         "Suggest-only autonomy against read-only internal data computes to Low risk, so a lightweight single-agent loop is appropriate. Because the agent never writes back to the expense system, iteration ceiling can be generous without materially increasing blast radius.",
+      alternativesConsidered:
+        "A supervisor + worker pattern was considered but rejected as unnecessary overhead - there's no write action to gate and no multi-channel input to isolate, so the added coordination cost wouldn't buy anything at Low risk. A stricter iteration ceiling was also considered but rejected: with no write access, a generous ceiling costs a few extra cents of compute at worst, not additional risk.",
     },
     riskComplianceDetails: {
       regulatoryFrameworks: [],

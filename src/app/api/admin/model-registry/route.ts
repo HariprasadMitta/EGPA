@@ -23,7 +23,15 @@ export async function POST(request: Request) {
     return Response.json({ error: "Only Admin can add Model Registry entries." }, { status: 403 });
   }
 
-  let body: { id?: string; name?: string; vendor?: string; version?: string; status?: string; allowedRiskTiers?: string[] };
+  let body: {
+    id?: string;
+    name?: string;
+    vendor?: string;
+    version?: string;
+    status?: string;
+    allowedRiskTiers?: string[];
+    changeReason?: string;
+  };
   try {
     body = await request.json();
   } catch {
@@ -31,6 +39,10 @@ export async function POST(request: Request) {
   }
   if (!body.id || !body.name || !body.vendor || !body.version || !body.status) {
     return Response.json({ error: "id, name, vendor, version, and status are required." }, { status: 400 });
+  }
+  const changeReason = body.changeReason?.trim();
+  if (!changeReason) {
+    return Response.json({ error: "A reason is required - why is this model being added at this status/tier scope?" }, { status: 400 });
   }
 
   const entry = await prisma.modelRegistryEntry.create({
@@ -41,6 +53,7 @@ export async function POST(request: Request) {
       version: body.version,
       status: body.status,
       allowedRiskTiers: body.allowedRiskTiers ?? [],
+      changeReason,
     },
   });
 

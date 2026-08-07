@@ -28,6 +28,7 @@ interface RecommendationPayload {
   iterationCeiling: number;
   contextStrategy: string;
   rationale: string;
+  alternativesConsidered: string;
 }
 
 function buildSystemPrompt(): string {
@@ -43,7 +44,8 @@ recommend a concrete agent architecture. Respond with ONLY a JSON object
   "loopPattern": string (one short label describing the control loop, e.g. "ReAct with reflection step"),
   "iterationCeiling": number (a sane max loop iterations for this risk tier - lower for higher risk),
   "contextStrategy": string (one short label, e.g. "Sliding window with tool-result summarization", "Full context, no compaction needed"),
-  "rationale": string (2-4 sentences explaining the choices above, referencing the risk tier and use case specifics)
+  "rationale": string (2-4 sentences explaining the choices above, referencing the risk tier and use case specifics),
+  "alternativesConsidered": string (2-4 sentences naming 1-2 concrete alternative frameworks/patterns that would also fit this use case, and the specific reason each was passed over in favor of the recommendation above - a real trade-off, not a restatement of the rationale)
 }
 
 Higher risk tiers should get tighter iteration ceilings, more conservative
@@ -105,7 +107,8 @@ function isValidRecommendation(value: unknown): value is RecommendationPayload {
     typeof v.loopPattern === "string" &&
     typeof v.iterationCeiling === "number" &&
     typeof v.contextStrategy === "string" &&
-    typeof v.rationale === "string"
+    typeof v.rationale === "string" &&
+    typeof v.alternativesConsidered === "string"
   );
 }
 

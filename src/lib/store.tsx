@@ -32,7 +32,7 @@ interface StoreContextValue {
   setRecommendation: (useCaseId: string, recommendation: Recommendation) => Promise<void>;
   acknowledgeGateItem: (useCaseId: string, control: string) => Promise<void>;
   finalizeGate: (useCaseId: string) => Promise<void>;
-  approveArb: (useCaseId: string) => Promise<void>;
+  approveArb: (useCaseId: string, reasoning: string) => Promise<string | null>;
   attestRecertification: (useCaseId: string) => Promise<string | null>;
   rejectUseCase: (useCaseId: string, reason: string) => Promise<string | null>;
   resubmitUseCase: (useCaseId: string) => Promise<string | null>;
@@ -181,6 +181,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         iterationCeiling: recommendation.iterationCeiling,
         contextStrategy: recommendation.contextStrategy,
         rationale: recommendation.rationale,
+        alternativesConsidered: recommendation.alternativesConsidered,
       }),
     });
     const data = await res.json();
@@ -239,19 +240,20 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
-  const approveArb = useCallback(async (useCaseId: string) => {
+  const approveArb = useCallback(async (useCaseId: string, reasoning: string): Promise<string | null> => {
     const res = await fetch(`/api/use-cases/${useCaseId}/gate`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ action: "approveArb" }),
+      body: JSON.stringify({ action: "approveArb", reasoning }),
     });
     const data = await res.json();
-    if (!res.ok) return;
+    if (!res.ok) return data.error ?? "Failed to approve.";
     setBundlesMap((prev) => {
       const existing = prev[useCaseId];
       if (!existing) return prev;
       return { ...prev, [useCaseId]: { ...existing, gate: data.gate } };
     });
+    return null;
   }, []);
 
   const attestRecertification = useCallback(async (useCaseId: string): Promise<string | null> => {

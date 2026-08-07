@@ -14,6 +14,7 @@ interface RecommendationBody {
   iterationCeiling: number;
   contextStrategy: string;
   rationale: string;
+  alternativesConsidered: string;
 }
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {

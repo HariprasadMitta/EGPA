@@ -270,6 +270,7 @@ export default function IntakeRiskProfilePage() {
         iterationCeiling: data.recommendation.iterationCeiling,
         contextStrategy: data.recommendation.contextStrategy,
         rationale: data.recommendation.rationale,
+        alternativesConsidered: data.recommendation.alternativesConsidered,
         createdAt: new Date().toISOString(),
         version: 1,
       };

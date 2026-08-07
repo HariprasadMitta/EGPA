@@ -64,6 +64,7 @@ async function main() {
           iterationCeiling: recommendation.iterationCeiling,
           contextStrategy: recommendation.contextStrategy,
           rationale: recommendation.rationale,
+          alternativesConsidered: recommendation.alternativesConsidered,
           createdAt: new Date(recommendation.createdAt),
           version: recommendation.version,
         },
@@ -86,6 +87,7 @@ async function main() {
           arbApproved: gate.arbApproved,
           arbApprovedBy: gate.arbApprovedBy,
           arbApprovedAt: gate.arbApprovedAt ? new Date(gate.arbApprovedAt) : null,
+          arbApprovalReasoning: gate.arbApprovalReasoning,
         },
       });
     }
@@ -148,7 +150,7 @@ async function main() {
     await prisma.modelRegistryEntry.upsert({
       where: { id: m.id },
       update: {},
-      create: { id: m.id, name: m.name, vendor: m.vendor, version: m.version, status: m.status, allowedRiskTiers: m.allowedRiskTiers },
+      create: { id: m.id, name: m.name, vendor: m.vendor, version: m.version, status: m.status, allowedRiskTiers: m.allowedRiskTiers, changeReason: m.changeReason },
     });
   }
   for (const s of MCP_SERVERS) {

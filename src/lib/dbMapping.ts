@@ -69,6 +69,7 @@ export function toRecommendation(row: DbRecommendation): Recommendation {
     iterationCeiling: row.iterationCeiling,
     contextStrategy: row.contextStrategy,
     rationale: row.rationale,
+    alternativesConsidered: row.alternativesConsidered,
     createdAt: row.createdAt.toISOString(),
     version: row.version,
   };
@@ -87,6 +88,7 @@ export function toGate(row: DbGovernanceGate): GovernanceGate {
     arbApproved: row.arbApproved,
     arbApprovedBy: row.arbApprovedBy,
     arbApprovedAt: row.arbApprovedAt ? row.arbApprovedAt.toISOString() : null,
+    arbApprovalReasoning: row.arbApprovalReasoning,
   };
 }
 

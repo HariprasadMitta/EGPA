@@ -180,6 +180,12 @@ model Recommendation {
   iterationCeiling Int
   contextStrategy  String
   rationale        String
+  // Real "what else did we consider and why not" - captured alongside
+  // rationale (which explains the choice made) rather than replacing it,
+  // per the structural rule that every decision surfaced by this platform
+  // states its trade-off, not just its outcome. Nullable: older rows and
+  // any hand-authored Recommendation predate this field.
+  alternativesConsidered String?
   createdAt        DateTime @default(now())
   version          Int
 
@@ -198,6 +204,12 @@ model GovernanceGate {
   arbApproved         Boolean   @default(false)
   arbApprovedBy       String?
   arbApprovedAt       DateTime?
+  // Real, required reasoning behind an ARB sign-off - previously this was
+  // a bare boolean with no record of *why* a Critical-tier use case was
+  // cleared, the highest-priority gap in "every decision states its
+  // reasoning." Nullable only because rows approved before this field
+  // existed can't retroactively have one.
+  arbApprovalReasoning String?
 
   useCase UseCase @relation(fields: [useCaseId], references: [id])
 }
@@ -436,6 +448,12 @@ model ModelRegistryEntry {
   allowedRiskTiers String[]
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
+  // Real reasoning for why this entry was added, or why its status last
+  // changed (e.g. approved -> deprecated) - same structural rule as
+  // ARB approval and Recommendation.alternativesConsidered: a governance
+  // decision on record without why it was made isn't real governance.
+  // Nullable only for rows that predate this field.
+  changeReason     String?
 }
 
 model McpServerEntry {
