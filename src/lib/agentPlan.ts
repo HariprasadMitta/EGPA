@@ -122,7 +122,7 @@ ${input.description}`;
     const modelName = getLastModelName();
     yield {
       type: "done",
-      provider: modelName ?? "momentum-primary",
+      provider: modelName ?? "egpa-primary",
       inputTokens,
       outputTokens,
       costUsd: estimateCostUsd(modelName, inputTokens, outputTokens),

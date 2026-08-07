@@ -38,7 +38,7 @@ export async function gatewayChatCompletion(
       authorization: `Bearer ${process.env.LITELLM_VIRTUAL_KEY}`,
     },
     body: JSON.stringify({
-      model: "momentum-primary",
+      model: "egpa-primary",
       max_tokens: maxTokens,
       messages: [
         { role: "system", content: system },
@@ -50,7 +50,7 @@ export async function gatewayChatCompletion(
   if (!res.ok) throw new Error(`AI Gateway call failed: ${await res.text()}`);
 
   const data = await res.json();
-  const modelName = res.headers.get("x-litellm-model-name") ?? "momentum-primary";
+  const modelName = res.headers.get("x-litellm-model-name") ?? "egpa-primary";
   const inputTokens = data?.usage?.prompt_tokens ?? 0;
   const outputTokens = data?.usage?.completion_tokens ?? 0;
   const realCost = data?.usage?.cost;

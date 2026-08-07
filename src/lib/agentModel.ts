@@ -5,7 +5,7 @@ import { buildDirectAgentModel } from "@/lib/llmDirect";
 // litellm-config.yaml). The app no longer picks a provider or holds a raw
 // provider key: it always talks to one gateway endpoint with one scoped
 // virtual key, and the gateway's own model_list/fallbacks config
-// (momentum-primary -> anthropic -> groq -> gemini) does what
+// (egpa-primary -> anthropic -> groq -> gemini) does what
 // resolveAgentProvider()'s branching used to do in app code.
 //
 // Real provider attribution: LiteLLM returns which upstream model actually
@@ -16,7 +16,7 @@ import { buildDirectAgentModel } from "@/lib/llmDirect";
 // a known upstream behavior). LangChain's ChatOpenAI doesn't surface raw
 // response headers itself, so a custom `fetch` captures it directly - this
 // is what keeps the Dashboard's "provider mix" stat real instead of a
-// constant "momentum-primary" for every step.
+// constant "egpa-primary" for every step.
 export interface AgentGatewayHandle {
   model: ChatOpenAI;
   getLastModelName: () => string | null;
@@ -41,7 +41,7 @@ export function buildAgentModel(): AgentGatewayHandle {
 
   const model = new ChatOpenAI({
     apiKey: process.env.LITELLM_VIRTUAL_KEY,
-    model: "momentum-primary",
+    model: "egpa-primary",
     configuration: {
       baseURL: process.env.LITELLM_BASE_URL,
       fetch: async (url: RequestInfo | URL, init?: RequestInit) => {

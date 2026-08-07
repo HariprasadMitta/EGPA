@@ -3,7 +3,7 @@ import { CohereEmbeddings } from "@langchain/cohere";
 import { tool } from "@langchain/core/tools";
 import { z } from "zod";
 
-export const KB_INDEX_NAME = "momentum-knowledge-base";
+export const KB_INDEX_NAME = "egpa-knowledge-base";
 export const KB_DIMENSION = 1024; // embed-english-v3.0
 export const KB_CLOUD = "aws";
 export const KB_REGION = "us-east-1";

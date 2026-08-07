@@ -60,7 +60,7 @@ says "keep going" with no specific ask, the honest answer is deployment
   - Now targeting **Google Cloud Run** instead (`Dockerfile` + `.dockerignore`
     at repo root, real memory headroom configurable). User has a GCP project
     (`project-58c05d21-8d4c-4df7-868`) and was working through: enable
-    billing on it → `gcloud run deploy momentum-litellm-gateway --source .
+    billing on it → `gcloud run deploy egpa-litellm-gateway --source .
     --region us-central1 --memory 1Gi --allow-unauthenticated
     --set-env-vars "..."` (full command with real values was given in chat,
     not repeated here since it contains real secrets - check chat history
@@ -80,7 +80,7 @@ says "keep going" with no specific ask, the honest answer is deployment
 
 **Next steps in order, once resumed:**
 1. Confirm Cloud Run deploy succeeded; get the real
-   `https://momentum-litellm-gateway-xxxxx-uc.a.run.app` URL.
+   `https://egpa-litellm-gateway-xxxxx-uc.a.run.app` URL.
 2. Mint a fresh virtual key against that hosted instance (`/key/generate`
    with the master key above), set it + the real base URL as
    `LITELLM_VIRTUAL_KEY` / `LITELLM_BASE_URL` on Vercel (production env).
@@ -95,7 +95,7 @@ says "keep going" with no specific ask, the honest answer is deployment
 6. Verify against the live URL: sign-in, a real execution end-to-end, a
    webhook trigger from outside the browser, live sync across two tabs,
    kill-switch/gate rejections - same proof pattern as every other phase.
-7. Optional cleanup: delete the abandoned `momentum-litellm-gateway`
+7. Optional cleanup: delete the abandoned `egpa-litellm-gateway`
    service on Render (free tier, not costing anything, no rush).
 
 ---

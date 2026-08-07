@@ -143,7 +143,7 @@ Your task: ${input.step.task}${priorStepsBlock}`;
     yield {
       type: "done",
       output: output.trim(),
-      provider: modelName ?? "momentum-primary",
+      provider: modelName ?? "egpa-primary",
       inputTokens,
       outputTokens,
       costUsd: estimateCostUsd(modelName, inputTokens, outputTokens),
