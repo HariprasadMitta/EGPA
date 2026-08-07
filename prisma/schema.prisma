@@ -389,6 +389,19 @@ model Budget {
   useCase UseCase? @relation(fields: [useCaseId], references: [id])
 }
 
+// Real admin-declared baseline: what this risk tier's governance review
+// would typically take without EGPA - an honest, org-declared assumption
+// (never presented as a measured fact), used to compute real time/cost
+// saved on use cases that clear the gate. Global for now, same MVP scope
+// as NotificationChannel below.
+model GovernanceBaseline {
+  riskTier       String   @id // "Low" | "Medium" | "High" | "Critical"
+  baselineHours  Float
+  costPerHourUsd Float?
+  updatedAt      DateTime @updatedAt
+  updatedByName  String?
+}
+
 // Real outbound notification target (Slack incoming webhook today,
 // kind is extensible). Global for now - one channel receives every
 // notification event (ARB approval needed, execution failed, kill-switch

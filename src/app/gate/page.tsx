@@ -580,6 +580,46 @@ function ResubmitBanner({ useCaseId, canResubmit }: { useCaseId: string; canResu
   );
 }
 
+interface TimeSavedData {
+  available: boolean;
+  actualHours?: number;
+  baselineHours?: number;
+  hoursSaved?: number;
+  percentFaster?: number;
+  costSavedUsd?: number | null;
+}
+
+function formatHoursLabel(hours: number): string {
+  if (hours < 1) return `${Math.round(hours * 60)} minutes`;
+  if (hours < 48) return `${hours.toFixed(1)} hours`;
+  return `${(hours / 24).toFixed(1)} days`;
+}
+
+function TimeSavedBanner({ useCaseId }: { useCaseId: string }) {
+  const [data, setData] = useState<TimeSavedData | null>(null);
+
+  useEffect(() => {
+    fetch(`/api/use-cases/${useCaseId}/time-saved`)
+      .then((r) => r.json())
+      .then(setData)
+      .catch(() => {});
+  }, [useCaseId]);
+
+  if (!data?.available || data.hoursSaved == null || data.percentFaster == null) return null;
+
+  return (
+    <div className="mt-4 rounded-md border border-[var(--accent)]/30 bg-[var(--tier-low-bg)] px-4 py-3 text-sm text-[var(--tier-low)]">
+      <strong>Cleared governance in {formatHoursLabel(data.actualHours ?? 0)}</strong> - your
+      organization&apos;s declared baseline for this risk tier is {formatHoursLabel(data.baselineHours ?? 0)},
+      a real {Math.round(data.percentFaster)}% faster
+      {data.costSavedUsd != null ? ` and an estimated $${data.costSavedUsd.toFixed(0)} saved` : ""}.
+      <span className="mt-1 block text-xs text-[var(--muted)]">
+        Baseline is a declared organizational assumption, not a measured fact - set by an admin.
+      </span>
+    </div>
+  );
+}
+
 function CommentsThread({ useCaseId }: { useCaseId: string }) {
   const [comments, setComments] = useState<Comment[]>([]);
   const [text, setText] = useState("");
@@ -857,10 +897,13 @@ export default function GatePage() {
       </div>
 
       {gate.acknowledged ? (
-        <div className="mt-6 rounded-md border border-[var(--tier-low)]/30 bg-[var(--tier-low-bg)] px-4 py-3 text-sm text-[var(--tier-low)]">
-          All required controls acknowledged. This use case has cleared its
-          governance gate.
-        </div>
+        <>
+          <div className="mt-6 rounded-md border border-[var(--tier-low)]/30 bg-[var(--tier-low-bg)] px-4 py-3 text-sm text-[var(--tier-low)]">
+            All required controls acknowledged. This use case has cleared its
+            governance gate.
+          </div>
+          <TimeSavedBanner useCaseId={useCase.id} />
+        </>
       ) : (
         <p className="mt-4 text-xs text-[var(--muted)]">
           {gate.requiredControls.length - gate.acknowledgedItems.length} of{" "}
