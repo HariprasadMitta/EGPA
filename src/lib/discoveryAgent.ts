@@ -1,5 +1,6 @@
 import { gatewayChatThread, type ChatMessage } from "@/lib/litellm";
 import { searchExistingUseCases } from "@/lib/discoveryTool";
+import { extractJson } from "@/lib/extractJson";
 
 export interface DiscoveryChatMessage {
   role: "user" | "assistant" | "tool";
@@ -59,13 +60,6 @@ function tryParseToolCall(text: string): { query: string } | null {
     return null;
   }
   return null;
-}
-
-function extractJson(text: string): unknown {
-  const trimmed = text.trim();
-  const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
-  const candidate = fenced ? fenced[1] : trimmed;
-  return JSON.parse(candidate);
 }
 
 function toThreadMessages(history: DiscoveryChatMessage[]): ChatMessage[] {

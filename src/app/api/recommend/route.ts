@@ -2,6 +2,7 @@ import { classifyRisk } from "@/lib/governance";
 import { gatewayChatCompletion } from "@/lib/litellm";
 import { clientIp, createRateLimiter } from "@/lib/rateLimit";
 import { prisma } from "@/lib/prisma";
+import { extractJson } from "@/lib/extractJson";
 import { AutonomyLevel, DataSensitivity, IntegrationSurface, RiskTier } from "@/types";
 
 export const runtime = "nodejs";
@@ -87,13 +88,6 @@ async function historicalPerformanceHint(riskTier: RiskTier): Promise<string | n
     .map(([provider, e]) => `- ${provider}: ${e.count} real steps, avg ${(e.durationSum / e.count / 1000).toFixed(1)}s, avg $${(e.costSum / e.count).toFixed(4)}/step`);
 
   return `Real historical performance at ${riskTier} tier from this platform's own past executions (reference this if it's genuinely relevant, don't force it):\n${lines.join("\n")}`;
-}
-
-function extractJson(text: string): unknown {
-  const trimmed = text.trim();
-  const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
-  const candidate = fenced ? fenced[1] : trimmed;
-  return JSON.parse(candidate);
 }
 
 function isValidRecommendation(value: unknown): value is RecommendationPayload {
