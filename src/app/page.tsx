@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useStore } from "@/lib/store";
 import { RiskBadge } from "@/components/RiskBadge";
+import { PipelineFlowDiagram } from "@/components/PipelineFlowDiagram";
 import { SAMPLE_BUNDLES } from "@/lib/seed";
 
 export default function LandingPage() {
@@ -109,7 +110,24 @@ export default function LandingPage() {
       </section>
 
       <div className="mx-auto max-w-6xl px-6 py-14">
-        <section id="samples" className="scroll-mt-20">
+        <section id="pipeline" className="scroll-mt-20">
+          <h2 className="text-2xl font-bold text-[var(--brand-strong)]">
+            The pipeline, step by step
+          </h2>
+          <p className="mt-2 max-w-2xl text-[var(--muted)]">
+            Seven real pages, in order &mdash; click any stage to jump straight there. The full
+            walkthrough of what each one does lives in the{" "}
+            <Link href="/guide" className="font-semibold text-[var(--accent)]">
+              Guide
+            </Link>
+            .
+          </p>
+          <div className="mt-6">
+            <PipelineFlowDiagram />
+          </div>
+        </section>
+
+        <section id="samples" className="mt-20 scroll-mt-20">
           <h2 className="text-2xl font-bold text-[var(--brand-strong)]">
             Try a pre-loaded example
           </h2>

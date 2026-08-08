@@ -82,6 +82,14 @@ interface RoadmapStep {
 const ROADMAP: RoadmapStep[] = [
   {
     n: 1,
+    title: "Discovery Advisor",
+    description:
+      "Optional, but where a real business problem should start - before anyone jumps to \"we need an AI agent.\" A real, persisted chat that asks clarifying questions, calls a real search_existing_use_cases tool to check whether something already covers the need, and concludes with a reasoned recommendation: process-only (no agent warranted), extend-existing (reuse what's already there), research-first (investigate before committing), or build. A \"build\" conclusion generates a detailed, submission-ready problem statement and suggested title, then hands both straight into Intake with one click - pre-filled, not re-typed.",
+    role: "Anyone signed in",
+    href: "/discovery",
+  },
+  {
+    n: 2,
     title: "Intake",
     description:
       "Two steps. First, fill in the title, description, owner, and steward, then choose the 4 core questionnaire options (data sensitivity, autonomy level, integration surface, expected users) - a preliminary risk tier updates as you go - and click \"Continue.\" Second, the Risk & Compliance Profile page: a deeper due-diligence questionnaire where two answers (human oversight frequency, customer-impact decision) visibly move the live risk tier via a gauge, before \"Get recommendation\" creates the real use case and calls the recommendation engine.",
@@ -89,23 +97,23 @@ const ROADMAP: RoadmapStep[] = [
     href: "/intake",
   },
   {
-    n: 2,
+    n: 3,
     title: "Recommendation",
     description:
-      "A real LLM call proposes a framework, tool stack, harness pattern, loop pattern, and context strategy, plus a clickable architecture diagram (click the Master Agent or any sub-agent for its role) and a read-only preview of the OSCAR governance checklist this risk tier requires. Click \"Proceed to governance gate\" to continue.",
+      "A real LLM call proposes a framework, tool stack, harness pattern, loop pattern, and context strategy, plus a clickable architecture diagram (click the Master Agent or any sub-agent for its role), the alternatives it considered and why they were passed over, and a read-only preview of the OSCAR governance checklist this risk tier requires. Click \"Proceed to governance gate\" to continue.",
     role: ROLE_LABELS.steward,
     href: "/recommendation",
   },
   {
-    n: 3,
+    n: 4,
     title: "Governance Gate",
     description:
-      "Check off every required control for this risk tier - all of them, not a subset, before \"Proceed to ADR\" unlocks. Critical-tier use cases also need a named ARB member to click \"Approve as {name}\" here - no one else can clear that specific box. A Governance Owner or Admin can also engage the kill-switch here at any time, real and enforced: flipping it blocks the next in-progress execution step server-side, not just in the UI.",
+      "Check off every required control for this risk tier - all of them, not a subset, before \"Proceed to ADR\" unlocks. Critical-tier use cases also need a named ARB member to state real written reasoning and click \"Approve as {name}\" here - no one else can clear that specific box, and a bare approval isn't enough. A Governance Owner or Admin can also engage the kill-switch here at any time, real and enforced: flipping it blocks the next in-progress execution step server-side, not just in the UI.",
     role: ROLE_LABELS["governance-owner"],
     href: "/gate",
   },
   {
-    n: 4,
+    n: 5,
     title: "ADR",
     description:
       "A versioned Architecture Decision Record assembles automatically from everything decided so far the moment the gate clears. Use \"Copy to clipboard\" or \"Download .md\" to take it with you, or \"View portfolio\" to move on.",
@@ -113,15 +121,15 @@ const ROADMAP: RoadmapStep[] = [
     href: "/adr",
   },
   {
-    n: 5,
+    n: 6,
     title: "Execution",
     description:
-      "Developer/Admin-only. Click \"Run execution\" to watch a real master agent plan the steps, then real sub-agent LLM calls execute each one live (tokens streaming in as they're generated, real tool calls, real cost). The Automation trigger panel here lets you generate a real webhook token so an execution can start from a curl call or a real cron service instead of a click - the same real event triggering an interviewer would expect of an agent that's an actual product, not a demo.",
+      "Developer/Admin-only. Click \"Run execution\" to watch a real master agent plan the steps, then real sub-agent LLM calls execute each one live (tokens streaming in as they're generated, real tool calls, real cost) - with a live two-node diagram showing exactly which node is active and lighting up the moment a real tool call is in flight. The Automation trigger panel here lets you generate a real webhook token so an execution can start from a curl call or a real cron service instead of a click - the same real event triggering an interviewer would expect of an agent that's an actual product, not a demo.",
     role: ROLE_LABELS.developer,
     href: "/execution",
   },
   {
-    n: 6,
+    n: 7,
     title: "Observability",
     description:
       "Portfolio-wide stat tiles, real time-series and by-model/by-tool/by-risk-tier charts, and an expandable execution history across every use case, plus this one use case's own token/cost/duration usage and step-by-step decision trace - nothing simulated. This is the real answer to \"is this agent costing more than the person doing the work\" - actual cost trends, not a guess. Also shows your Model Builder connection status if you're a Developer/Admin.",
