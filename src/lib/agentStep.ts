@@ -19,8 +19,21 @@ export interface StepInput {
   priorSteps: { name: string; output: string }[];
 }
 
+// Real agent-loop telemetry, additive to the existing token/done/error
+// events every consumer already handles (execute-step's SSE relay, the
+// webhook background loop) - a consumer that only switches on "token" and
+// "done"/"error" (the webhook loop does exactly this) simply ignores these,
+// so adding them can't change existing execution behavior. Lets the UI show
+// which LangGraph node is active and when the one real tool this graph can
+// call (knowledge_base_search) is actually invoked, instead of only ever
+// showing the token stream.
 export type StepEvent =
   | { type: "token"; text: string }
+  | { type: "node"; node: "agent" | "tools" }
+  | { type: "model"; provider: string }
+  | { type: "tool_call"; toolName: string }
+  | { type: "tool_result"; toolName: string; result: string }
+  | { type: "usage_delta"; inputTokens: number; outputTokens: number }
   | {
       type: "done";
       output: string;
@@ -123,10 +136,50 @@ Your task: ${input.step.task}${priorStepsBlock}`;
       { streamMode: "messages" }
     );
 
+    let lastNode: string | undefined;
+    let modelAnnounced = false;
+    let toolCallAnnounced = false;
+
     for await (const event of events) {
       const [chunk, metadata] = event as [AIMessageChunk, { langgraph_node?: string }];
-      if (metadata?.langgraph_node !== "agent") continue;
-      if (chunk.tool_call_chunks && chunk.tool_call_chunks.length > 0) continue;
+      const node = metadata?.langgraph_node;
+
+      if ((node === "agent" || node === "tools") && node !== lastNode) {
+        lastNode = node;
+        yield { type: "node", node };
+      }
+
+      if (node === "tools") {
+        // The tools node (buildGraph's callTools) returns its ToolMessage(s)
+        // whole, not as streamed deltas - chunk.content here is already the
+        // real, complete tool result text. TOOLS has exactly one entry
+        // (knowledgeBaseSearch), so attributing this result to it is a real
+        // fact, not a guess.
+        const resultText = typeof chunk.content === "string" ? chunk.content : "";
+        if (resultText) yield { type: "tool_result", toolName: "knowledge_base_search", result: resultText };
+        continue;
+      }
+      if (node !== "agent") continue;
+
+      if (chunk.tool_call_chunks && chunk.tool_call_chunks.length > 0) {
+        if (!toolCallAnnounced) {
+          toolCallAnnounced = true;
+          yield { type: "tool_call", toolName: "knowledge_base_search" };
+        }
+        continue;
+      }
+
+      if (!modelAnnounced) {
+        // Real per-request provider attribution (x-litellm-model-name) is
+        // captured by agentModel.ts's custom fetch as soon as the response
+        // headers arrive, which happens before any content chunk reaches
+        // this loop - safe to read here, not just at the end.
+        const modelName = getLastModelName();
+        if (modelName) {
+          modelAnnounced = true;
+          yield { type: "model", provider: modelName };
+        }
+      }
 
       const text = typeof chunk.content === "string" ? chunk.content : "";
       if (text) {
@@ -136,6 +189,7 @@ Your task: ${input.step.task}${priorStepsBlock}`;
       if (chunk.usage_metadata) {
         inputTokens = chunk.usage_metadata.input_tokens ?? inputTokens;
         outputTokens = chunk.usage_metadata.output_tokens ?? outputTokens;
+        yield { type: "usage_delta", inputTokens, outputTokens };
       }
     }
 

@@ -9,6 +9,7 @@ import { readSseEvents } from "@/lib/sse";
 import { RiskBadge } from "@/components/RiskBadge";
 import { PipelineTrain } from "@/components/PipelineTrain";
 import { ArchitectureDiagram } from "@/components/ArchitectureDiagram";
+import { AgentLoopVisualizer, AgentLoopState, IDLE_AGENT_LOOP_STATE } from "@/components/AgentLoopVisualizer";
 import { ExecutionRun, SubAgentStep, SubAgentStepStatus, WebhookTriggerInfo } from "@/types";
 
 const STATUS_ICON: Record<SubAgentStepStatus, string> = {
@@ -47,10 +48,12 @@ function ExecutionCard({
   run,
   isLive,
   liveOutput,
+  liveActivity,
 }: {
   run: ExecutionRun;
   isLive: boolean;
   liveOutput: Record<string, string>;
+  liveActivity: Record<string, AgentLoopState>;
 }) {
   return (
     <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6">
@@ -111,6 +114,11 @@ function ExecutionCard({
                   <span className="font-semibold">Why this tool: </span>
                   {step.rationale}
                 </p>
+              )}
+              {isLive && step.status === "running" && (
+                <div className="mt-2">
+                  <AgentLoopVisualizer leftLabel={step.name} state={liveActivity[step.id] ?? IDLE_AGENT_LOOP_STATE} />
+                </div>
               )}
               {previous?.output && (
                 <p className="mt-2 rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-xs text-[var(--muted)]">
@@ -299,6 +307,7 @@ export default function ExecutionPage() {
   const [planningSummary, setPlanningSummary] = useState("");
   const [planningSteps, setPlanningSteps] = useState<PlanStepDraft[]>([]);
   const [liveOutput, setLiveOutput] = useState<Record<string, string>>({});
+  const [liveActivity, setLiveActivity] = useState<Record<string, AgentLoopState>>({});
   const [dryRun, setDryRun] = useState(false);
 
   if (!user) {
@@ -463,6 +472,7 @@ export default function ExecutionPage() {
       for (const step of steps) {
         await updateExecutionStep(useCase.id, executionId, step.id, { status: "running" });
         setLiveOutput((prev) => ({ ...prev, [step.id]: "" }));
+        setLiveActivity((prev) => ({ ...prev, [step.id]: IDLE_AGENT_LOOP_STATE }));
         try {
           const stepRes = await fetch("/api/execute-step", {
             method: "POST",
@@ -487,11 +497,28 @@ export default function ExecutionPage() {
             continue;
           }
 
+          function patchActivity(patch: Partial<AgentLoopState>) {
+            setLiveActivity((prev) => ({
+              ...prev,
+              [step.id]: { ...(prev[step.id] ?? IDLE_AGENT_LOOP_STATE), ...patch },
+            }));
+          }
+
           let finalEvent: Record<string, unknown> | null = null;
           for await (const event of readSseEvents(stepRes)) {
             if (event.type === "token") {
               const text = event.text as string;
               setLiveOutput((prev) => ({ ...prev, [step.id]: (prev[step.id] ?? "") + text }));
+            } else if (event.type === "node") {
+              patchActivity({ node: event.node as "agent" | "tools" });
+            } else if (event.type === "model") {
+              patchActivity({ provider: event.provider as string });
+            } else if (event.type === "tool_call") {
+              patchActivity({ toolName: event.toolName as string, toolStatus: "calling" });
+            } else if (event.type === "tool_result") {
+              patchActivity({ toolStatus: "done", toolResultPreview: event.result as string });
+            } else if (event.type === "usage_delta") {
+              patchActivity({ inputTokens: event.inputTokens as number, outputTokens: event.outputTokens as number });
             } else if (event.type === "done" || event.type === "error") {
               finalEvent = event;
             }
@@ -619,6 +646,7 @@ export default function ExecutionPage() {
                 run={run}
                 isLive={run.id === currentExecutionId && running}
                 liveOutput={liveOutput}
+                liveActivity={liveActivity}
               />
             ))}
           </div>

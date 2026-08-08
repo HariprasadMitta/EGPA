@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth";
+import { AgentLoopVisualizer } from "@/components/AgentLoopVisualizer";
 
 const DISCOVERY_HANDOFF_KEY = "egpa-discovery-handoff-v1";
 
@@ -186,8 +187,20 @@ export default function DiscoveryPage() {
               )}
               {active.messages.map((m, i) =>
                 m.role === "tool" ? (
-                  <div key={i} className="rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-xs text-[var(--muted)]">
-                    {m.content}
+                  <div key={i}>
+                    <AgentLoopVisualizer
+                      leftLabel="Discovery Advisor"
+                      state={{
+                        node: null,
+                        provider: null,
+                        toolName: "search_existing_use_cases",
+                        toolStatus: "done",
+                        toolResultPreview: m.content,
+                        inputTokens: 0,
+                        outputTokens: 0,
+                      }}
+                    />
+                    <p className="mt-1 pl-1 text-[11px] text-[var(--muted)]">{m.content}</p>
                   </div>
                 ) : (
                   <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
