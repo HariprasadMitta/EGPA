@@ -12,6 +12,8 @@ export type DiscoveryPath = "process-only" | "extend-existing" | "research-first
 export interface DiscoveryFinalization {
   recommendedPath: DiscoveryPath;
   rationale: string;
+  problemStatement: string;
+  suggestedTitle: string;
 }
 
 const DISCOVERY_SYSTEM_PROMPT = `You are the Discovery Advisor inside an enterprise AI governance
@@ -39,14 +41,18 @@ this shape:
 
 {
   "recommendedPath": "process-only" | "extend-existing" | "research-first" | "build",
-  "rationale": string (2-4 sentences on why this path over the other three - a real trade-off referencing specifics from the conversation, not a generic restatement)
+  "rationale": string (2-4 sentences on why this path over the other three - a real trade-off referencing specifics from the conversation, not a generic restatement),
+  "suggestedTitle": string (a short, specific title for this potential use case, e.g. "Employee Expense Anomaly Detection Agent" - not generic like "AI Agent"),
+  "problemStatement": string (a detailed, submission-ready paragraph - 4-8 sentences - synthesizing EVERY concrete detail actually surfaced in this conversation: the specific business problem, real numbers/volumes mentioned, the current manual process and why it's a problem, the specific criteria or rules discussed, and what was found (or not found) when checking for an existing solution. Written in third person as a standalone problem description, detailed enough that someone could paste it directly into a use case submission form's description field without having to re-explain anything already said in this chat. Do not just restate the opening message - it must incorporate the follow-up detail gathered afterward.)
 }
 
 Path definitions:
 - "process-only": the problem is better solved by a non-AI process or policy fix; no agent is warranted.
 - "extend-existing": an existing use case (surfaced via search_existing_use_cases in this conversation) already covers this need closely enough to extend rather than duplicate.
 - "research-first": the org should invest time researching the problem space, data availability, or a build-vs-integrate decision before committing to a specific agent design.
-- "build": a new use case is warranted and specific enough to take into Intake now.`;
+- "build": a new use case is warranted and specific enough to take into Intake now.
+
+Respond with valid JSON on a single logical structure - do not put a literal line break inside any string value, use the sequence \\n if you need one.`;
 
 function tryParseToolCall(text: string): { query: string } | null {
   const trimmed = text.trim();
@@ -105,7 +111,12 @@ function isValidFinalization(value: unknown): value is DiscoveryFinalization {
   if (!value || typeof value !== "object") return false;
   const v = value as Record<string, unknown>;
   const paths: DiscoveryPath[] = ["process-only", "extend-existing", "research-first", "build"];
-  return typeof v.rationale === "string" && paths.includes(v.recommendedPath as DiscoveryPath);
+  return (
+    typeof v.rationale === "string" &&
+    typeof v.problemStatement === "string" &&
+    typeof v.suggestedTitle === "string" &&
+    paths.includes(v.recommendedPath as DiscoveryPath)
+  );
 }
 
 export async function finalizeDiscoverySession(messages: DiscoveryChatMessage[]): Promise<DiscoveryFinalization> {

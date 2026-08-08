@@ -520,6 +520,14 @@ model ProblemDiscoverySession {
   status             String    @default("active") // "active" | "completed"
   recommendedPath    String? // "process-only" | "extend-existing" | "research-first" | "build"
   pathRationale      String?
+  // Real, submission-ready synthesis of the whole conversation - every
+  // specific detail actually surfaced (volume, criteria, current process,
+  // why no existing tool covers it), not just the person's original
+  // one-line opening message. This is what Intake gets pre-filled with on
+  // hand-off, not pathRationale (which explains the path choice, not the
+  // problem itself).
+  problemStatement   String?
+  suggestedTitle     String? // pre-fills Intake's title field alongside problemStatement
   handedOffUseCaseId String? // set once the user proceeds from this session's summary into Intake
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt

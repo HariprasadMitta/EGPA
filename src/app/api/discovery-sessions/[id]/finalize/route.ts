@@ -27,17 +27,27 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
   }
 
   try {
-    const { recommendedPath, rationale } = await finalizeDiscoverySession(messages);
+    const { recommendedPath, rationale, problemStatement, suggestedTitle } = await finalizeDiscoverySession(messages);
 
     const updated = await prisma.problemDiscoverySession.update({
       where: { id },
-      data: { status: "completed", recommendedPath, pathRationale: rationale },
+      data: {
+        status: "completed",
+        recommendedPath,
+        pathRationale: rationale,
+        problemStatement,
+        suggestedTitle,
+        // A better title than the raw first-message truncation now exists.
+        title: suggestedTitle,
+      },
     });
 
     return Response.json({
       status: updated.status,
       recommendedPath: updated.recommendedPath,
       pathRationale: updated.pathRationale,
+      problemStatement: updated.problemStatement,
+      suggestedTitle: updated.suggestedTitle,
     });
   } catch (err) {
     return Response.json({ error: `Discovery Advisor error: ${(err as Error).message}` }, { status: 502 });

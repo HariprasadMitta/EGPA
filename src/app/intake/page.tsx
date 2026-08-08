@@ -81,9 +81,10 @@ export default function IntakePage() {
     if (!raw) return;
     window.sessionStorage.removeItem(DISCOVERY_HANDOFF_KEY);
     try {
-      const handoff = JSON.parse(raw) as { sessionId: string; description: string };
+      const handoff = JSON.parse(raw) as { sessionId: string; description: string; title?: string };
       // eslint-disable-next-line react-hooks/set-state-in-effect
       if (handoff.description) setDescription(handoff.description);
+      if (handoff.title) setTitle(handoff.title);
       if (handoff.sessionId) setDiscoverySessionId(handoff.sessionId);
     } catch {
       // Malformed handoff payload - ignore, the form still works unprefilled.

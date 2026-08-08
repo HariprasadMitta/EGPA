@@ -43,6 +43,12 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     lines.push("");
     lines.push(row.pathRationale);
   }
+  if (row.problemStatement) {
+    lines.push("");
+    lines.push("**Problem statement (submission-ready):**");
+    lines.push("");
+    lines.push(row.problemStatement);
+  }
   if (row.handedOffUseCaseId) {
     lines.push("");
     lines.push(`**Handed off to use case:** ${row.handedOffUseCaseId}`);

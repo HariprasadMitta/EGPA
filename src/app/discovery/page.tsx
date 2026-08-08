@@ -26,6 +26,8 @@ interface SessionSummary {
 interface SessionDetail extends SessionSummary {
   messages: DiscoveryChatMessage[];
   pathRationale: string | null;
+  problemStatement: string | null;
+  suggestedTitle: string | null;
 }
 
 const PATH_LABELS: Record<string, string> = {
@@ -108,7 +110,15 @@ export default function DiscoveryPage() {
       const res = await fetch(`/api/discovery-sessions/${active.id}/finalize`, { method: "POST" });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
-      setActive({ ...active, status: data.status, recommendedPath: data.recommendedPath, pathRationale: data.pathRationale });
+      setActive({
+        ...active,
+        status: data.status,
+        recommendedPath: data.recommendedPath,
+        pathRationale: data.pathRationale,
+        problemStatement: data.problemStatement,
+        suggestedTitle: data.suggestedTitle,
+        title: data.suggestedTitle ?? active.title,
+      });
       loadSessions();
     } catch (err) {
       setError((err as Error).message);
@@ -122,7 +132,11 @@ export default function DiscoveryPage() {
     const firstUserMessage = active.messages.find((m) => m.role === "user")?.content ?? "";
     window.sessionStorage.setItem(
       DISCOVERY_HANDOFF_KEY,
-      JSON.stringify({ sessionId: active.id, description: firstUserMessage })
+      JSON.stringify({
+        sessionId: active.id,
+        description: active.problemStatement ?? firstUserMessage,
+        title: active.suggestedTitle ?? "",
+      })
     );
     router.push("/intake");
   }
@@ -253,6 +267,14 @@ export default function DiscoveryPage() {
                   Recommendation: {PATH_LABELS[active.recommendedPath ?? ""] ?? active.recommendedPath}
                 </p>
                 <p className="mt-2 text-sm">{active.pathRationale}</p>
+                {active.problemStatement && (
+                  <>
+                    <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
+                      Problem statement (submission-ready)
+                    </p>
+                    <p className="mt-2 text-sm leading-relaxed">{active.problemStatement}</p>
+                  </>
+                )}
                 <div className="mt-3 flex flex-wrap gap-2">
                   <a
                     href={`/api/discovery-sessions/${active.id}/summary`}

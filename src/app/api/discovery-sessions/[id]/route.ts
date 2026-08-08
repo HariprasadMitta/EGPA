@@ -21,6 +21,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     messages: row.messages as unknown as DiscoveryChatMessage[],
     recommendedPath: row.recommendedPath,
     pathRationale: row.pathRationale,
+    problemStatement: row.problemStatement,
+    suggestedTitle: row.suggestedTitle,
     handedOffUseCaseId: row.handedOffUseCaseId,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
