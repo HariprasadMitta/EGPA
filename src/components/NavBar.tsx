@@ -94,6 +94,14 @@ export function NavBar() {
           )}
           {user && (
             <Link
+              href="/discovery"
+              className={pillClasses(pathname === "/discovery", "bg-[var(--accent)]")}
+            >
+              Discovery
+            </Link>
+          )}
+          {user && (
+            <Link
               href="/inbox"
               className={`${pillClasses(pathname === "/inbox")} relative`}
             >

@@ -5,7 +5,9 @@
 // this reads LiteLLM's real per-request cost and provider attribution
 // straight off the response instead of falling back to an estimate.
 import { estimateCostUsd } from "@/lib/pricing";
-import { directChatCompletion } from "@/lib/llmDirect";
+import { directChatThread, type ChatMessage } from "@/lib/llmDirect";
+
+export type { ChatMessage };
 
 export interface GatewayCompletionResult {
   text: string;
@@ -15,14 +17,13 @@ export interface GatewayCompletionResult {
   costUsd: number;
 }
 
-export async function gatewayChatCompletion(
-  system: string,
-  user: string,
-  maxTokens: number
-): Promise<GatewayCompletionResult> {
+// Multi-turn variant - takes the full message history so callers (the
+// Discovery Advisor's chat, in particular) can carry conversation context
+// across turns instead of being limited to one system + one user message.
+export async function gatewayChatThread(messages: ChatMessage[], maxTokens: number): Promise<GatewayCompletionResult> {
   // Same emergency-only escape hatch as src/lib/agentModel.ts - see there.
   if (process.env.LLM_DIRECT_MODE === "true") {
-    return directChatCompletion(system, user, maxTokens);
+    return directChatThread(messages, maxTokens);
   }
 
   if (!process.env.LITELLM_BASE_URL || !process.env.LITELLM_VIRTUAL_KEY) {
@@ -40,10 +41,7 @@ export async function gatewayChatCompletion(
     body: JSON.stringify({
       model: "egpa-primary",
       max_tokens: maxTokens,
-      messages: [
-        { role: "system", content: system },
-        { role: "user", content: user },
-      ],
+      messages,
     }),
   });
 
@@ -62,4 +60,14 @@ export async function gatewayChatCompletion(
     outputTokens,
     costUsd: typeof realCost === "number" ? realCost : estimateCostUsd(modelName, inputTokens, outputTokens),
   };
+}
+
+export async function gatewayChatCompletion(system: string, user: string, maxTokens: number): Promise<GatewayCompletionResult> {
+  return gatewayChatThread(
+    [
+      { role: "system", content: system },
+      { role: "user", content: user },
+    ],
+    maxTokens
+  );
 }
