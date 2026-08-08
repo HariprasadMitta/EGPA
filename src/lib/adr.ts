@@ -82,6 +82,10 @@ and blast radius. It was not selected by the requester.
 
 ${recommendation.rationale}
 
+**Alternatives considered:**
+
+${recommendation.alternativesConsidered ?? "_Not captured for this recommendation._"}
+
 ## Governance Gate (OSCAR - Ownership, Stewardship, Auditability)
 
 - **HITL tier:** ${gate.hitlTier}
@@ -92,7 +96,9 @@ ${gate.requiredControls.map((c) => `  - ${c}`).join("\n")}
     gate.requiresArbApproval
       ? `\n- **Architecture Review Board sign-off:** ${
           gate.arbApproved
-            ? `Approved by ${gate.arbApprovedBy} on ${gate.arbApprovedAt}`
+            ? `Approved by ${gate.arbApprovedBy} on ${gate.arbApprovedAt}${
+                gate.arbApprovalReasoning ? ` - reasoning: ${gate.arbApprovalReasoning}` : ""
+              }`
             : "Pending - blocking"
         }`
       : ""

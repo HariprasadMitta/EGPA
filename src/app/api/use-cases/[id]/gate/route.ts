@@ -13,7 +13,7 @@ export const runtime = "nodejs";
 type GateActionBody =
   | { action: "toggle"; control: string }
   | { action: "finalize" }
-  | { action: "approveArb" }
+  | { action: "approveArb"; reasoning: string }
   | { action: "attest" }
   | { action: "reject"; reason: string }
   | { action: "resubmit" };
@@ -99,6 +99,13 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     if (!canApproveArb(session.user.role as UserRole) && !delegated) {
       return Response.json({ error: "Only an ARB member, Admin, or someone with an active ARB delegation can approve this." }, { status: 403 });
     }
+    const reasoning = body.reasoning?.trim();
+    if (!reasoning) {
+      return Response.json(
+        { error: "Reasoning is required to approve - state why this Critical-tier use case is acceptable, not just that it's approved." },
+        { status: 400 }
+      );
+    }
     // Real segregation of duties: the account that owns this use case can't
     // also be the one clearing its ARB sign-off, even if they happen to
     // hold the arb/admin role too - a classic first-week audit finding if
@@ -118,6 +125,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         arbApproved: true,
         arbApprovedBy: delegated ? `${session.user.name} (via delegation)` : session.user.name,
         arbApprovedAt: new Date(),
+        arbApprovalReasoning: reasoning,
       },
     });
     await logAuditEntry({
@@ -125,6 +133,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       actorUserId: session.user.id,
       actorName: session.user.name ?? "Unknown",
       action: "arb_approved",
+      detail: reasoning,
     });
     await broadcastBundle(id);
     return Response.json({ gate: toGate(updated) });
@@ -165,8 +174,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       );
     }
     const reason = body.reason?.trim();
-    if (!reason) {
-      return Response.json({ error: "A reason is required to reject a use case." }, { status: 400 });
+    if (!reason || reason.length < 15) {
+      return Response.json({ error: "A real reason (at least 15 characters) is required to reject a use case." }, { status: 400 });
     }
     const updated = await prisma.useCase.update({ where: { id }, data: { status: "rejected" } });
     await logAuditEntry({

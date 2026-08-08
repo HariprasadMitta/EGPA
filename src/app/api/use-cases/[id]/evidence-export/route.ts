@@ -1,6 +1,8 @@
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { USE_CASE_INCLUDE } from "@/lib/dbMapping";
+import { computeTimeSaved, formatHours } from "@/lib/timeSaved";
+import { getReconciliationView } from "@/lib/reconciliation";
 
 export const runtime = "nodejs";
 
@@ -23,6 +25,16 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   });
 
   const latestAdr = [...useCase.adrs].sort((a, b) => b.version - a.version)[0] ?? null;
+
+  const baseline = await prisma.governanceBaseline.findUnique({ where: { riskTier: useCase.riskTier } });
+  const timeSaved = computeTimeSaved({
+    createdAt: useCase.createdAt,
+    acknowledgedAt: useCase.gate?.acknowledgedAt ?? null,
+    baselineHours: baseline?.baselineHours ?? null,
+    costPerHourUsd: baseline?.costPerHourUsd ?? null,
+  });
+
+  const reconciliation = await getReconciliationView(id);
 
   const lines: string[] = [];
   lines.push(`# Audit Evidence Package: ${useCase.title}`);
@@ -80,8 +92,51 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   lines.push("");
   lines.push("---");
   lines.push("");
+
+  lines.push("## 4. Time Saved");
+  lines.push("");
+  if (!timeSaved) {
+    lines.push(
+      "_Not available - either the governance gate hasn't cleared yet, or no admin-declared baseline is set for this risk tier (Admin -> Governance baseline)._"
+    );
+  } else {
+    lines.push(`- Baseline (declared, ${useCase.riskTier} tier): ${formatHours(timeSaved.baselineHours)}`);
+    lines.push(`- Actual (Intake submission to Gate clearing): ${formatHours(timeSaved.actualHours)}`);
+    lines.push(`- Time saved: ${formatHours(timeSaved.hoursSaved)} (${timeSaved.percentFaster.toFixed(0)}% faster than baseline)`);
+    if (timeSaved.costSavedUsd != null) {
+      lines.push(`- Cost saved: $${timeSaved.costSavedUsd.toFixed(2)} (at the admin-declared cost/hour for this tier)`);
+    }
+  }
+  lines.push("");
+  lines.push("---");
+  lines.push("");
+
+  lines.push("## 5. Declared vs. Actual Reconciliation Summary");
+  lines.push("");
+  if (!reconciliation) {
+    lines.push("_Not available._");
+  } else {
+    lines.push(`- Declared tools: ${reconciliation.declaredTools.length > 0 ? reconciliation.declaredTools.join(", ") : "_none declared_"}`);
+    lines.push(`- Declared model vendor: ${reconciliation.declaredModelVendor ?? "_not captured_"}`);
+    lines.push(`- Internal executions run through this platform's own engine: ${reconciliation.internalExecutionCount} (preventively guaranteed to match the declared stack)`);
+    lines.push(`- External usage reports received: ${reconciliation.externalReports.length}`);
+    lines.push(`- Total undeclared-tool incidents across external reports: ${reconciliation.totalUndeclaredToolIncidents}`);
+    if (reconciliation.externalReports.length > 0) {
+      lines.push("");
+      lines.push("| Reported At | Source | Tools Used | Model Used | Undeclared Tools |");
+      lines.push("|---|---|---|---|---|");
+      for (const r of reconciliation.externalReports) {
+        lines.push(
+          `| ${r.reportedAt} | ${r.source} | ${r.toolsUsed.join(", ") || "-"} | ${r.modelUsed ?? "-"} | ${r.undeclaredTools.join(", ") || "-"} |`
+        );
+      }
+    }
+  }
+  lines.push("");
+  lines.push("---");
+  lines.push("");
   lines.push(
-    `## 4. Current Kill-Switch State: ${useCase.killSwitchEngaged ? "ENGAGED" : "Disengaged"}`
+    `## 6. Current Kill-Switch State: ${useCase.killSwitchEngaged ? "ENGAGED" : "Disengaged"}`
   );
   lines.push("");
   lines.push("*End of evidence package.*");

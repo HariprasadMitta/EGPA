@@ -481,6 +481,45 @@ function GovernanceHistoryPanel({ useCaseId }: { useCaseId: string }) {
   );
 }
 
+function ArbApprovalPanel({ useCaseId, approverName }: { useCaseId: string; approverName: string }) {
+  const { approveArb } = useStore();
+  const [reasoning, setReasoning] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleApprove() {
+    if (reasoning.trim().length < 15) {
+      setError("State why this Critical-tier use case is acceptable (at least 15 characters) before approving - not just that it's approved.");
+      return;
+    }
+    setSubmitting(true);
+    setError(null);
+    const err = await approveArb(useCaseId, reasoning.trim());
+    setSubmitting(false);
+    if (err) setError(err);
+  }
+
+  return (
+    <div className="mt-4 space-y-3">
+      <textarea
+        value={reasoning}
+        onChange={(e) => setReasoning(e.target.value)}
+        placeholder="Reasoning for this sign-off - what makes this Critical-tier use case's risk acceptable, referencing its controls or blast radius. Shown on the ADR and recorded in the audit trail."
+        rows={3}
+        className="w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm"
+      />
+      <button
+        onClick={handleApprove}
+        disabled={submitting}
+        className="rounded-full bg-[var(--brand)] px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-[var(--brand-strong)] disabled:opacity-60"
+      >
+        {submitting ? "Approving..." : `Approve as ${approverName}`}
+      </button>
+      {error && <p className="text-xs text-[var(--tier-critical)]">{error}</p>}
+    </div>
+  );
+}
+
 function RejectPanel({ useCaseId, canReject }: { useCaseId: string; canReject: boolean }) {
   const { rejectUseCase } = useStore();
   const [open, setOpen] = useState(false);
@@ -491,8 +530,8 @@ function RejectPanel({ useCaseId, canReject }: { useCaseId: string; canReject: b
   if (!canReject) return null;
 
   async function handleReject() {
-    if (!reason.trim()) {
-      setError("Enter a reason for rejecting this use case.");
+    if (reason.trim().length < 15) {
+      setError("Enter a real reason for rejecting this use case (at least 15 characters) - it's shown to the owner and recorded in the audit trail.");
       return;
     }
     setSubmitting(true);
@@ -580,6 +619,46 @@ function ResubmitBanner({ useCaseId, canResubmit }: { useCaseId: string; canResu
   );
 }
 
+interface TimeSavedData {
+  available: boolean;
+  actualHours?: number;
+  baselineHours?: number;
+  hoursSaved?: number;
+  percentFaster?: number;
+  costSavedUsd?: number | null;
+}
+
+function formatHoursLabel(hours: number): string {
+  if (hours < 1) return `${Math.round(hours * 60)} minutes`;
+  if (hours < 48) return `${hours.toFixed(1)} hours`;
+  return `${(hours / 24).toFixed(1)} days`;
+}
+
+function TimeSavedBanner({ useCaseId }: { useCaseId: string }) {
+  const [data, setData] = useState<TimeSavedData | null>(null);
+
+  useEffect(() => {
+    fetch(`/api/use-cases/${useCaseId}/time-saved`)
+      .then((r) => r.json())
+      .then(setData)
+      .catch(() => {});
+  }, [useCaseId]);
+
+  if (!data?.available || data.hoursSaved == null || data.percentFaster == null) return null;
+
+  return (
+    <div className="mt-4 rounded-md border border-[var(--accent)]/30 bg-[var(--tier-low-bg)] px-4 py-3 text-sm text-[var(--tier-low)]">
+      <strong>Cleared governance in {formatHoursLabel(data.actualHours ?? 0)}</strong> - your
+      organization&apos;s declared baseline for this risk tier is {formatHoursLabel(data.baselineHours ?? 0)},
+      a real {Math.round(data.percentFaster)}% faster
+      {data.costSavedUsd != null ? ` and an estimated $${data.costSavedUsd.toFixed(0)} saved` : ""}.
+      <span className="mt-1 block text-xs text-[var(--muted)]">
+        Baseline is a declared organizational assumption, not a measured fact - set by an admin.
+      </span>
+    </div>
+  );
+}
+
 function CommentsThread({ useCaseId }: { useCaseId: string }) {
   const [comments, setComments] = useState<Comment[]>([]);
   const [text, setText] = useState("");
@@ -656,7 +735,7 @@ function CommentsThread({ useCaseId }: { useCaseId: string }) {
 export default function GatePage() {
   const router = useRouter();
   const { user } = useAuth();
-  const { active, acknowledgeGateItem, finalizeGate, approveArb, toggleKillSwitch } = useStore();
+  const { active, acknowledgeGateItem, finalizeGate, toggleKillSwitch } = useStore();
 
   if (!active || !active.gate) {
     return (
@@ -692,10 +771,6 @@ export default function GatePage() {
     router.push("/adr");
   }
 
-  function handleArbApprove() {
-    if (!user) return;
-    approveArb(useCase.id);
-  }
 
   function handleToggleKillSwitch() {
     toggleKillSwitch(useCase.id, !useCase.killSwitchEngaged);
@@ -787,13 +862,20 @@ export default function GatePage() {
           </div>
 
           {gate.arbApproved ? (
-            <p className="mt-2 text-sm text-[var(--status-done)]">
-              Approved by <strong>{gate.arbApprovedBy}</strong>
-              {gate.arbApprovedAt && (
-                <> on {new Date(gate.arbApprovedAt).toLocaleString("en-US")}</>
+            <>
+              <p className="mt-2 text-sm text-[var(--status-done)]">
+                Approved by <strong>{gate.arbApprovedBy}</strong>
+                {gate.arbApprovedAt && (
+                  <> on {new Date(gate.arbApprovedAt).toLocaleString("en-US")}</>
+                )}
+                .
+              </p>
+              {gate.arbApprovalReasoning && (
+                <p className="mt-2 text-sm">
+                  <span className="font-semibold">Reasoning:</span> {gate.arbApprovalReasoning}
+                </p>
               )}
-              .
-            </p>
+            </>
           ) : isArb && user?.id === useCase.ownerUserId ? (
             <p className="mt-2 text-sm text-[var(--tier-medium)]">
               You submitted this use case, so you can&apos;t also clear its ARB sign-off &mdash;
@@ -807,12 +889,7 @@ export default function GatePage() {
                 Architecture Review Board before it can proceed &mdash; sign
                 off manually below.
               </p>
-              <button
-                onClick={handleArbApprove}
-                className="mt-4 rounded-full bg-[var(--brand)] px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-[var(--brand-strong)]"
-              >
-                Approve as {user?.name}
-              </button>
+              <ArbApprovalPanel useCaseId={useCase.id} approverName={user?.name ?? ""} />
             </>
           ) : (
             <p className="mt-2 text-sm text-[var(--muted)]">
@@ -857,10 +934,13 @@ export default function GatePage() {
       </div>
 
       {gate.acknowledged ? (
-        <div className="mt-6 rounded-md border border-[var(--tier-low)]/30 bg-[var(--tier-low-bg)] px-4 py-3 text-sm text-[var(--tier-low)]">
-          All required controls acknowledged. This use case has cleared its
-          governance gate.
-        </div>
+        <>
+          <div className="mt-6 rounded-md border border-[var(--tier-low)]/30 bg-[var(--tier-low-bg)] px-4 py-3 text-sm text-[var(--tier-low)]">
+            All required controls acknowledged. This use case has cleared its
+            governance gate.
+          </div>
+          <TimeSavedBanner useCaseId={useCase.id} />
+        </>
       ) : (
         <p className="mt-4 text-xs text-[var(--muted)]">
           {gate.requiredControls.length - gate.acknowledgedItems.length} of{" "}

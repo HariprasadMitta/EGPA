@@ -37,11 +37,12 @@ export function buildDirectAgentModel(): AgentGatewayHandle {
   return { model, getLastModelName: () => label };
 }
 
-export async function directChatCompletion(
-  system: string,
-  user: string,
-  maxTokens: number
-): Promise<GatewayCompletionResult> {
+export interface ChatMessage {
+  role: "system" | "user" | "assistant";
+  content: string;
+}
+
+export async function directChatThread(messages: ChatMessage[], maxTokens: number): Promise<GatewayCompletionResult> {
   const modelName = directModelName();
   const res = await fetch(`${DIRECT_BASE_URL}/chat/completions`, {
     method: "POST",
@@ -52,10 +53,7 @@ export async function directChatCompletion(
     body: JSON.stringify({
       model: modelName,
       max_tokens: maxTokens,
-      messages: [
-        { role: "system", content: system },
-        { role: "user", content: user },
-      ],
+      messages,
     }),
   });
 
@@ -72,4 +70,14 @@ export async function directChatCompletion(
     outputTokens,
     costUsd: estimateCostUsd(modelName, inputTokens, outputTokens),
   };
+}
+
+export async function directChatCompletion(system: string, user: string, maxTokens: number): Promise<GatewayCompletionResult> {
+  return directChatThread(
+    [
+      { role: "system", content: system },
+      { role: "user", content: user },
+    ],
+    maxTokens
+  );
 }

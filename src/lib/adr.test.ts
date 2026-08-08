@@ -29,6 +29,7 @@ const recommendation: Recommendation = {
   iterationCeiling: 12,
   contextStrategy: "Sliding window",
   rationale: "Because the risk tier and autonomy level call for it.",
+  alternativesConsidered: "A supervisor + worker pattern was considered but rejected as unneeded overhead.",
   createdAt: "2026-01-01T00:00:00.000Z",
   version: 1,
 };
@@ -45,6 +46,7 @@ const gate: GovernanceGate = {
   arbApproved: false,
   arbApprovedBy: null,
   arbApprovedAt: null,
+  arbApprovalReasoning: null,
 };
 
 describe("buildADRContent", () => {

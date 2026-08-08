@@ -248,6 +248,17 @@ export default function IntakeRiskProfilePage() {
         riskComplianceDetails
       );
 
+      if (draft.discoverySessionId) {
+        // Best-effort link-back to the Discovery session this problem
+        // statement came from - not blocking, since a real UseCase already
+        // exists at this point regardless of whether this linkage succeeds.
+        fetch(`/api/discovery-sessions/${draft.discoverySessionId}`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ handedOffUseCaseId: useCase.id }),
+        }).catch(() => {});
+      }
+
       const res = await fetch("/api/recommend", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -270,6 +281,7 @@ export default function IntakeRiskProfilePage() {
         iterationCeiling: data.recommendation.iterationCeiling,
         contextStrategy: data.recommendation.contextStrategy,
         rationale: data.recommendation.rationale,
+        alternativesConsidered: data.recommendation.alternativesConsidered,
         createdAt: new Date().toISOString(),
         version: 1,
       };

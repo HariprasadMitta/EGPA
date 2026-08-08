@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { ModelStatus, RiskTier } from "@/types";
 import { RiskBadge } from "@/components/RiskBadge";
@@ -21,6 +21,7 @@ interface ModelEntry {
   version: string;
   status: ModelStatus;
   allowedRiskTiers: RiskTier[];
+  changeReason: string | null;
 }
 
 interface McpEntry {
@@ -36,6 +37,7 @@ function AddModelForm({ onAdded }: { onAdded: () => void }) {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ id: "", name: "", vendor: "", version: "", status: "under-review" as ModelStatus });
   const [tiers, setTiers] = useState<RiskTier[]>([]);
+  const [changeReason, setChangeReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -44,18 +46,23 @@ function AddModelForm({ onAdded }: { onAdded: () => void }) {
       setError("id, name, vendor, and version are required.");
       return;
     }
+    if (!changeReason.trim()) {
+      setError("A reason is required - why is this model being added at this status/tier scope?");
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
       const res = await fetch("/api/admin/model-registry", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ ...form, allowedRiskTiers: tiers }),
+        body: JSON.stringify({ ...form, allowedRiskTiers: tiers, changeReason: changeReason.trim() }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       setForm({ id: "", name: "", vendor: "", version: "", status: "under-review" });
       setTiers([]);
+      setChangeReason("");
       setOpen(false);
       onAdded();
     } catch (err) {
@@ -93,6 +100,13 @@ function AddModelForm({ onAdded }: { onAdded: () => void }) {
           </label>
         ))}
       </div>
+      <textarea
+        value={changeReason}
+        onChange={(e) => setChangeReason(e.target.value)}
+        placeholder="Reason - why add this model at this status/tier scope?"
+        rows={2}
+        className="sm:col-span-2 rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 py-1.5 text-sm"
+      />
       {error && <p className="sm:col-span-2 text-xs text-[var(--tier-critical)]">{error}</p>}
       <div className="sm:col-span-2 flex gap-2">
         <button onClick={submit} disabled={busy} className="rounded-full bg-[var(--brand)] px-4 py-1.5 text-xs font-semibold text-white disabled:opacity-60">
@@ -115,6 +129,11 @@ export default function RegistryPage() {
   const [statusFilter, setStatusFilter] = useState<ModelStatus | "all">("all");
   const [tierFilter, setTierFilter] = useState<RiskTier | "all">("all");
 
+  const [pendingChange, setPendingChange] = useState<{ id: string; status: ModelStatus } | null>(null);
+  const [pendingReason, setPendingReason] = useState("");
+  const [pendingBusy, setPendingBusy] = useState(false);
+  const [pendingError, setPendingError] = useState<string | null>(null);
+
   function load() {
     fetch("/api/admin/model-registry").then((r) => r.json()).then((d) => setModels(d.entries ?? []));
     fetch("/api/admin/mcp-servers").then((r) => r.json()).then((d) => setServers(d.entries ?? []));
@@ -122,13 +141,30 @@ export default function RegistryPage() {
 
   useEffect(load, []);
 
-  async function setModelStatus(id: string, status: ModelStatus) {
-    await fetch(`/api/admin/model-registry/${id}`, {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ status }),
-    });
-    load();
+  async function confirmModelStatus() {
+    if (!pendingChange) return;
+    if (!pendingReason.trim()) {
+      setPendingError("A reason is required when changing a model's status.");
+      return;
+    }
+    setPendingBusy(true);
+    setPendingError(null);
+    try {
+      const res = await fetch(`/api/admin/model-registry/${pendingChange.id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ status: pendingChange.status, changeReason: pendingReason.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setPendingChange(null);
+      setPendingReason("");
+      load();
+    } catch (err) {
+      setPendingError((err as Error).message);
+    } finally {
+      setPendingBusy(false);
+    }
   }
 
   const filtered = useMemo(() => {
@@ -193,45 +229,92 @@ export default function RegistryPage() {
               <th className="px-4 py-3">Version</th>
               <th className="px-4 py-3">Status</th>
               <th className="px-4 py-3">Allowed risk tiers</th>
+              <th className="px-4 py-3">Reason on file</th>
             </tr>
           </thead>
           <tbody>
             {filtered.map((m) => (
-              <tr key={m.id} className="border-b border-[var(--border)] last:border-0">
-                <td className="px-4 py-3 font-semibold">{m.name}</td>
-                <td className="px-4 py-3 text-[var(--muted)]">{m.vendor}</td>
-                <td className="px-4 py-3 text-[var(--muted)]">{m.version}</td>
-                <td className="px-4 py-3">
-                  {isAdmin ? (
-                    <select
-                      value={m.status}
-                      onChange={(e) => setModelStatus(m.id, e.target.value as ModelStatus)}
-                      className={`rounded-full border-0 px-2.5 py-1 text-xs font-semibold ${STATUS_STYLES[m.status]}`}
-                    >
-                      {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-                    </select>
-                  ) : (
-                    <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${STATUS_STYLES[m.status]}`}>
-                      {m.status}
-                    </span>
-                  )}
-                </td>
-                <td className="px-4 py-3">
-                  {m.allowedRiskTiers.length === 0 ? (
-                    <span className="text-xs text-[var(--muted)]">None</span>
-                  ) : (
-                    <div className="flex flex-wrap gap-1">
-                      {m.allowedRiskTiers.map((t) => (
-                        <RiskBadge key={t} tier={t} className="px-2 py-0.5 text-[10px]" />
-                      ))}
-                    </div>
-                  )}
-                </td>
-              </tr>
+              <Fragment key={m.id}>
+                <tr className="border-b border-[var(--border)] last:border-0">
+                  <td className="px-4 py-3 font-semibold">{m.name}</td>
+                  <td className="px-4 py-3 text-[var(--muted)]">{m.vendor}</td>
+                  <td className="px-4 py-3 text-[var(--muted)]">{m.version}</td>
+                  <td className="px-4 py-3">
+                    {isAdmin ? (
+                      <select
+                        value={m.status}
+                        onChange={(e) => {
+                          const status = e.target.value as ModelStatus;
+                          if (status === m.status) return;
+                          setPendingChange({ id: m.id, status });
+                          setPendingReason("");
+                          setPendingError(null);
+                        }}
+                        className={`rounded-full border-0 px-2.5 py-1 text-xs font-semibold ${STATUS_STYLES[m.status]}`}
+                      >
+                        {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                    ) : (
+                      <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${STATUS_STYLES[m.status]}`}>
+                        {m.status}
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
+                    {m.allowedRiskTiers.length === 0 ? (
+                      <span className="text-xs text-[var(--muted)]">None</span>
+                    ) : (
+                      <div className="flex flex-wrap gap-1">
+                        {m.allowedRiskTiers.map((t) => (
+                          <RiskBadge key={t} tier={t} className="px-2 py-0.5 text-[10px]" />
+                        ))}
+                      </div>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 max-w-xs text-xs text-[var(--muted)]" title={m.changeReason ?? ""}>
+                    {m.changeReason ? (m.changeReason.length > 80 ? `${m.changeReason.slice(0, 80)}...` : m.changeReason) : "Not captured"}
+                  </td>
+                </tr>
+                {pendingChange?.id === m.id && (
+                  <tr className="border-b border-[var(--border)] bg-[var(--background)] last:border-0">
+                    <td colSpan={6} className="px-4 py-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-xs font-semibold">
+                          Changing status to <strong>{pendingChange.status}</strong> - reason required:
+                        </span>
+                        <input
+                          value={pendingReason}
+                          onChange={(e) => setPendingReason(e.target.value)}
+                          placeholder="Why is this status changing?"
+                          className="min-w-[220px] flex-1 rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 py-1.5 text-xs"
+                        />
+                        <button
+                          onClick={confirmModelStatus}
+                          disabled={pendingBusy}
+                          className="rounded-full bg-[var(--brand)] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
+                        >
+                          {pendingBusy ? "Saving..." : "Confirm"}
+                        </button>
+                        <button
+                          onClick={() => {
+                            setPendingChange(null);
+                            setPendingReason("");
+                            setPendingError(null);
+                          }}
+                          className="rounded-full border border-[var(--border)] px-3 py-1.5 text-xs"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                      {pendingError && <p className="mt-2 text-xs text-[var(--tier-critical)]">{pendingError}</p>}
+                    </td>
+                  </tr>
+                )}
+              </Fragment>
             ))}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-[var(--muted)]">
+                <td colSpan={6} className="px-4 py-8 text-center text-[var(--muted)]">
                   No models match those filters.
                 </td>
               </tr>

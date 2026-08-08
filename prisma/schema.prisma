@@ -61,6 +61,7 @@ model User {
   delegationsGiven    ApprovalDelegation[] @relation("DelegatedBy")
   delegationsReceived ApprovalDelegation[] @relation("DelegatedTo")
   passwordResetTokens PasswordResetToken[]
+  discoverySessions   ProblemDiscoverySession[]
 }
 
 // Real forgot-password flow. No email-sending service is configured, so the
@@ -180,6 +181,12 @@ model Recommendation {
   iterationCeiling Int
   contextStrategy  String
   rationale        String
+  // Real "what else did we consider and why not" - captured alongside
+  // rationale (which explains the choice made) rather than replacing it,
+  // per the structural rule that every decision surfaced by this platform
+  // states its trade-off, not just its outcome. Nullable: older rows and
+  // any hand-authored Recommendation predate this field.
+  alternativesConsidered String?
   createdAt        DateTime @default(now())
   version          Int
 
@@ -198,6 +205,12 @@ model GovernanceGate {
   arbApproved         Boolean   @default(false)
   arbApprovedBy       String?
   arbApprovedAt       DateTime?
+  // Real, required reasoning behind an ARB sign-off - previously this was
+  // a bare boolean with no record of *why* a Critical-tier use case was
+  // cleared, the highest-priority gap in "every decision states its
+  // reasoning." Nullable only because rows approved before this field
+  // existed can't retroactively have one.
+  arbApprovalReasoning String?
 
   useCase UseCase @relation(fields: [useCaseId], references: [id])
 }
@@ -389,6 +402,19 @@ model Budget {
   useCase UseCase? @relation(fields: [useCaseId], references: [id])
 }
 
+// Real admin-declared baseline: what this risk tier's governance review
+// would typically take without EGPA - an honest, org-declared assumption
+// (never presented as a measured fact), used to compute real time/cost
+// saved on use cases that clear the gate. Global for now, same MVP scope
+// as NotificationChannel below.
+model GovernanceBaseline {
+  riskTier       String   @id // "Low" | "Medium" | "High" | "Critical"
+  baselineHours  Float
+  costPerHourUsd Float?
+  updatedAt      DateTime @updatedAt
+  updatedByName  String?
+}
+
 // Real outbound notification target (Slack incoming webhook today,
 // kind is extensible). Global for now - one channel receives every
 // notification event (ARB approval needed, execution failed, kill-switch
@@ -423,6 +449,12 @@ model ModelRegistryEntry {
   allowedRiskTiers String[]
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
+  // Real reasoning for why this entry was added, or why its status last
+  // changed (e.g. approved -> deprecated) - same structural rule as
+  // ARB approval and Recommendation.alternativesConsidered: a governance
+  // decision on record without why it was made isn't real governance.
+  // Nullable only for rows that predate this field.
+  changeReason     String?
 }
 
 model McpServerEntry {
@@ -467,4 +499,30 @@ model ApiKey {
   revoked         Boolean   @default(false)
 
   createdByUser User @relation(fields: [createdByUserId], references: [id])
+}
+
+// Real, persisted Discovery Advisor conversation - a chat that runs before
+// Intake, helping someone articulate a business problem before jumping to
+// "build an agent." messages is the full real turn-by-turn transcript
+// (including any search_existing_use_cases tool calls/results actually
+// made, not just the final replies) so a session can be resumed or
+// reviewed later, not just its final summary. recommendedPath/pathRationale
+// are set once the advisor concludes - one of process-only (no AI needed),
+// extend-existing (reuse a use case that already covers this),
+// research-first (the org should investigate before building), or build
+// (a new use case is warranted) - always with real reasoning, same
+// structural rule as every other decision this platform surfaces.
+model ProblemDiscoverySession {
+  id                 String    @id @default(cuid())
+  userId             String
+  title              String?
+  messages           Json
+  status             String    @default("active") // "active" | "completed"
+  recommendedPath    String? // "process-only" | "extend-existing" | "research-first" | "build"
+  pathRationale      String?
+  handedOffUseCaseId String? // set once the user proceeds from this session's summary into Intake
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
 }

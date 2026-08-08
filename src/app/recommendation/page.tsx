@@ -101,6 +101,13 @@ export default function RecommendationPage() {
             Rationale
           </h2>
           <p className="mt-4 text-sm leading-relaxed">{recommendation.rationale}</p>
+
+          <h3 className="mt-6 text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
+            Alternatives considered
+          </h3>
+          <p className="mt-2 text-sm leading-relaxed">
+            {recommendation.alternativesConsidered ?? "Not captured for this recommendation."}
+          </p>
         </div>
       </div>
 

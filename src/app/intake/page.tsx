@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { classifyRisk } from "@/lib/governance";
 import {
@@ -11,6 +11,7 @@ import {
 } from "@/types";
 
 export const INTAKE_DRAFT_KEY = "egpa-intake-draft-v1";
+const DISCOVERY_HANDOFF_KEY = "egpa-discovery-handoff-v1";
 
 export interface IntakeDraft {
   title: string;
@@ -22,6 +23,7 @@ export interface IntakeDraft {
   expectedUsers: ExpectedUsers;
   owner: string;
   steward: string;
+  discoverySessionId?: string;
 }
 
 const DATA_SENSITIVITY_OPTIONS: { value: DataSensitivity; label: string }[] = [
@@ -68,6 +70,25 @@ export default function IntakePage() {
   const [owner, setOwner] = useState("");
   const [steward, setSteward] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [discoverySessionId, setDiscoverySessionId] = useState<string | undefined>(undefined);
+
+  // One-time consumption of a Discovery Advisor hand-off: prefills the
+  // problem statement this person already worked through in chat, and
+  // carries the session id forward so it can be linked back once this
+  // draft becomes a real UseCase (src/app/intake/risk-profile/page.tsx).
+  useEffect(() => {
+    const raw = window.sessionStorage.getItem(DISCOVERY_HANDOFF_KEY);
+    if (!raw) return;
+    window.sessionStorage.removeItem(DISCOVERY_HANDOFF_KEY);
+    try {
+      const handoff = JSON.parse(raw) as { sessionId: string; description: string };
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      if (handoff.description) setDescription(handoff.description);
+      if (handoff.sessionId) setDiscoverySessionId(handoff.sessionId);
+    } catch {
+      // Malformed handoff payload - ignore, the form still works unprefilled.
+    }
+  }, []);
 
   const previewTier = classifyRisk({ dataSensitivity, autonomyLevel, integrationSurface });
 
@@ -88,6 +109,7 @@ export default function IntakePage() {
       expectedUsers,
       owner,
       steward,
+      discoverySessionId,
     };
     window.sessionStorage.setItem(INTAKE_DRAFT_KEY, JSON.stringify(draft));
     router.push("/intake/risk-profile");

@@ -4,6 +4,13 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth";
 
+function formatProcessingTime(ms: number): string {
+  const seconds = ms / 1000;
+  if (seconds < 60) return `${seconds.toFixed(1)}s`;
+  if (seconds < 3600) return `${(seconds / 60).toFixed(1)}m`;
+  return `${(seconds / 3600).toFixed(1)}h`;
+}
+
 interface BudgetRow {
   id: string;
   useCaseId: string | null;
@@ -463,6 +470,192 @@ function RetentionSection() {
   );
 }
 
+interface GovernanceBaselineRow {
+  riskTier: "Low" | "Medium" | "High" | "Critical";
+  baselineHours: number | null;
+  costPerHourUsd: number | null;
+  updatedAt: string | null;
+  updatedByName: string | null;
+}
+
+function GovernanceBaselineSection() {
+  const [rows, setRows] = useState<GovernanceBaselineRow[]>([]);
+  const [drafts, setDrafts] = useState<Record<string, { baselineHours: string; costPerHourUsd: string }>>({});
+  const [savingTier, setSavingTier] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+
+  function load() {
+    fetch("/api/admin/governance-baseline")
+      .then((r) => r.json())
+      .then((d) => {
+        const loaded: GovernanceBaselineRow[] = d.baselines ?? [];
+        setRows(loaded);
+        setDrafts(
+          Object.fromEntries(
+            loaded.map((r) => [
+              r.riskTier,
+              { baselineHours: r.baselineHours != null ? String(r.baselineHours) : "", costPerHourUsd: r.costPerHourUsd != null ? String(r.costPerHourUsd) : "" },
+            ])
+          )
+        );
+      });
+  }
+  useEffect(load, []);
+
+  async function save(riskTier: string) {
+    const draft = drafts[riskTier];
+    if (!draft || !draft.baselineHours) return;
+    setSavingTier(riskTier);
+    setMessage(null);
+    try {
+      const res = await fetch("/api/admin/governance-baseline", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          riskTier,
+          baselineHours: Number(draft.baselineHours),
+          costPerHourUsd: draft.costPerHourUsd ? Number(draft.costPerHourUsd) : null,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setMessage(`Saved baseline for ${riskTier}.`);
+      load();
+    } catch (err) {
+      setMessage((err as Error).message);
+    } finally {
+      setSavingTier(null);
+    }
+  }
+
+  return (
+    <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6">
+      <h2 className="text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">
+        Governance baseline &amp; time saved
+      </h2>
+      <p className="mt-1 text-xs text-[var(--muted)]">
+        Declare how long the manual process used to take (and optionally its cost/hour) per risk tier. Once
+        set, use cases that clear the Governance Gate show real elapsed time compared against this honest,
+        admin-declared assumption &mdash; never presented as a measured fact.
+      </p>
+      <div className="mt-4 space-y-2">
+        {rows.map((r) => {
+          const draft = drafts[r.riskTier] ?? { baselineHours: "", costPerHourUsd: "" };
+          return (
+            <div key={r.riskTier} className="flex flex-wrap items-center gap-2 rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm">
+              <span className="w-20 font-semibold">{r.riskTier}</span>
+              <input
+                value={draft.baselineHours}
+                onChange={(e) => setDrafts((d) => ({ ...d, [r.riskTier]: { ...draft, baselineHours: e.target.value } }))}
+                type="number"
+                placeholder="Baseline hours"
+                className="w-36 rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm"
+              />
+              <input
+                value={draft.costPerHourUsd}
+                onChange={(e) => setDrafts((d) => ({ ...d, [r.riskTier]: { ...draft, costPerHourUsd: e.target.value } }))}
+                type="number"
+                placeholder="Cost/hour USD (optional)"
+                className="w-44 rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm"
+              />
+              <button
+                onClick={() => save(r.riskTier)}
+                disabled={savingTier === r.riskTier || !draft.baselineHours}
+                className="rounded-full bg-[var(--brand)] px-4 py-2 text-xs font-semibold text-white disabled:opacity-60"
+              >
+                {savingTier === r.riskTier ? "Saving..." : "Save"}
+              </button>
+              <span className="text-xs text-[var(--muted)]">
+                {r.updatedAt ? `set by ${r.updatedByName ?? "unknown"} on ${new Date(r.updatedAt).toLocaleDateString("en-US")}` : "not set"}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+      {message && <p className="mt-2 text-xs text-[var(--muted)]">{message}</p>}
+    </div>
+  );
+}
+
+interface UserConsumptionRow {
+  userId: string;
+  name: string;
+  email: string;
+  role: string;
+  executionCount: number;
+  dryRunExecutionCount: number;
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  totalCostUsd: number;
+  totalProcessingTimeMs: number;
+}
+
+function UserConsumptionSection() {
+  const [rows, setRows] = useState<UserConsumptionRow[]>([]);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/admin/user-consumption")
+      .then((r) => r.json())
+      .then((d) => {
+        setRows(d.users ?? []);
+        setLoaded(true);
+      });
+  }, []);
+
+  return (
+    <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6">
+      <h2 className="text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">
+        Per-user consumption
+      </h2>
+      <p className="mt-1 text-xs text-[var(--muted)]">
+        Real tokens, cost, and agent processing time per person - summed from every real
+        ExecutionRun their use cases produced. This is processing time, not session/login time -
+        this app doesn&apos;t track how long anyone is actually active in the browser.
+      </p>
+      <div className="mt-4 overflow-x-auto">
+        <table className="w-full text-left text-sm">
+          <thead className="border-b border-[var(--border)] text-xs uppercase tracking-wide text-[var(--muted)]">
+            <tr>
+              <th className="py-2 pr-4">User</th>
+              <th className="py-2 pr-4">Executions</th>
+              <th className="py-2 pr-4">Tokens (in / out)</th>
+              <th className="py-2 pr-4">Real cost</th>
+              <th className="py-2 pr-4">Processing time</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.userId} className="border-b border-[var(--border)] last:border-0">
+                <td className="py-2 pr-4">
+                  <span className="font-semibold">{r.name}</span>{" "}
+                  <span className="text-xs text-[var(--muted)]">
+                    {r.email} &middot; {r.role}
+                  </span>
+                </td>
+                <td className="py-2 pr-4">
+                  {r.executionCount}
+                  {r.dryRunExecutionCount > 0 && (
+                    <span className="text-xs text-[var(--muted)]"> ({r.dryRunExecutionCount} dry-run)</span>
+                  )}
+                </td>
+                <td className="py-2 pr-4">
+                  {r.totalInputTokens.toLocaleString("en-US")} / {r.totalOutputTokens.toLocaleString("en-US")}
+                </td>
+                <td className="py-2 pr-4">${r.totalCostUsd.toFixed(4)}</td>
+                <td className="py-2 pr-4">{formatProcessingTime(r.totalProcessingTimeMs)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {loaded && rows.length === 0 && (
+          <p className="py-4 text-sm text-[var(--muted)]">No one has run a real execution yet.</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function AdminPage() {
   const { user } = useAuth();
 
@@ -492,6 +685,8 @@ export default function AdminPage() {
         </p>
       </div>
       <NotificationSection />
+      <UserConsumptionSection />
+      <GovernanceBaselineSection />
       <BudgetsSection />
       <ApiKeysSection />
       <AccessRecertificationSection />
