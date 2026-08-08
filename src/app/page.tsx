@@ -68,31 +68,34 @@ export default function LandingPage() {
             </h2>
             <ul className="mt-4 space-y-4 text-sm text-[var(--foreground)]">
               <li className="flex gap-3">
-                <span className="mt-0.5 h-5 w-5 flex-none rounded-full bg-[var(--tier-low-bg)] text-center text-xs font-bold text-[var(--tier-low)]">
+                <span
+                  className="mt-0.5 h-5 w-5 flex-none rounded-full text-center text-xs font-bold text-white"
+                  style={{ backgroundColor: "var(--series-7)" }}
+                >
                   1
                 </span>
                 <span>
+                  <strong>A real discovery conversation first</strong> &mdash;
+                  Discovery Advisor questions the build-an-agent default before you ever open Intake.
+                </span>
+              </li>
+              <li className="flex gap-3">
+                <span className="mt-0.5 h-5 w-5 flex-none rounded-full bg-[var(--tier-low-bg)] text-center text-xs font-bold text-[var(--tier-low)]">
+                  2
+                </span>
+                <span>
                   <strong>Recommended framework &amp; tool stack</strong> &mdash;
-                  framework-agnostic, drawn from a structured catalog.
+                  framework-agnostic, plus the real alternatives it considered and why they lost.
                 </span>
               </li>
               <li className="flex gap-3">
                 <span className="mt-0.5 h-5 w-5 flex-none rounded-full bg-[var(--tier-medium-bg)] text-center text-xs font-bold text-[var(--tier-medium)]">
-                  2
-                </span>
-                <span>
-                  <strong>Harness, loop, and context strategy</strong> &mdash;
-                  with an iteration ceiling matched to risk.
-                </span>
-              </li>
-              <li className="flex gap-3">
-                <span className="mt-0.5 h-5 w-5 flex-none rounded-full bg-[var(--tier-high-bg)] text-center text-xs font-bold text-[var(--tier-high)]">
                   3
                 </span>
                 <span>
                   <strong>A computed governance verdict</strong> &mdash; risk
                   tier, required controls, and HITL level you must satisfy, not
-                  opt into.
+                  opt into &mdash; with real written reasoning behind every sign-off.
                 </span>
               </li>
               <li className="flex gap-3">
@@ -102,6 +105,18 @@ export default function LandingPage() {
                 <span>
                   <strong>An auto-generated, versioned ADR</strong> &mdash;
                   downloadable, traceable to every decision above.
+                </span>
+              </li>
+              <li className="flex gap-3">
+                <span
+                  className="mt-0.5 h-5 w-5 flex-none rounded-full text-center text-xs font-bold text-white"
+                  style={{ backgroundColor: "var(--series-5)" }}
+                >
+                  5
+                </span>
+                <span>
+                  <strong>Real business value, not a projection</strong> &mdash;
+                  actual time and cost saved against an honest, declared baseline.
                 </span>
               </li>
             </ul>
@@ -159,6 +174,31 @@ export default function LandingPage() {
         </section>
 
         <section className="mt-20 grid gap-6 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6 sm:grid-cols-2">
+          <div>
+            <h3 className="font-semibold text-[var(--brand-strong)]">
+              Discovery before build
+            </h3>
+            <p className="mt-2 text-sm text-[var(--muted)]">
+              Not every business problem needs an agent. Discovery Advisor is a real chat that
+              runs before Intake, asking clarifying questions and calling a real search over this
+              org&apos;s own use cases &mdash; then concludes with one of four honest paths:
+              fix the process, extend something that already exists, research first, or build.
+              Only &ldquo;build&rdquo; hands off into Intake, pre-filled with a detailed problem
+              statement instead of a vague one-liner.
+            </p>
+          </div>
+          <div>
+            <h3 className="font-semibold text-[var(--brand-strong)]">
+              Every decision states its trade-off
+            </h3>
+            <p className="mt-2 text-sm text-[var(--muted)]">
+              A governance decision on record without why it was made isn&apos;t real governance.
+              ARB sign-off requires real written reasoning, not a bare approval. Rejections
+              require a substantive reason. Recommendations state the alternatives they
+              considered and why they lost. Model Registry changes require a reason on file.
+              Nothing gets approved silently.
+            </p>
+          </div>
           <div>
             <h3 className="font-semibold text-[var(--brand-strong)]">
               Control Plane vs. AI Gateway
