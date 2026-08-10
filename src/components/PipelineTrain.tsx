@@ -44,7 +44,7 @@ function computeStages(bundle: UseCaseBundle): Stage[] {
     },
     {
       key: "execution",
-      label: "Execution",
+      label: "Agentic System",
       href: "/execution",
       state: executionDone ? "done" : executionRunning ? "current" : adrDone ? "current" : "pending",
     },

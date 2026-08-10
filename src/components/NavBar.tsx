@@ -1,16 +1,27 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 import { canAccessDeveloperTools, canSeeAllUseCases, ROLE_LABELS } from "@/lib/roles";
 
-const CONTROL_PLANE_LINKS = [
+interface NavLink {
+  href: string;
+  label: string;
+}
+
+const PIPELINE_LINKS: NavLink[] = [
   { href: "/guide", label: "Guide" },
+  { href: "/discovery", label: "Discovery" },
   { href: "/intake", label: "Intake" },
-  { href: "/registry", label: "Model Registry" },
   { href: "/portfolio", label: "Portfolio" },
+];
+
+const BUILD_LINKS: NavLink[] = [
+  { href: "/execution", label: "Agentic System" },
+  { href: "/registry", label: "Model Registry" },
+  { href: "/mlops", label: "Model Builder" },
 ];
 
 function pillClasses(active: boolean, activeBg = "bg-[var(--brand)]") {
@@ -21,11 +32,86 @@ function pillClasses(active: boolean, activeBg = "bg-[var(--brand)]") {
   }`;
 }
 
+function ChevronIcon({ open }: { open: boolean }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2.4}
+      className={`h-3.5 w-3.5 flex-none transition-transform ${open ? "rotate-180" : ""}`}
+    >
+      <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+// Groups several related links behind one top-level pill instead of each
+// getting its own slot in the row - the flat 11-pill layout this replaced
+// got clumsy as more real pages were added. Click-toggle (not hover-only)
+// so it behaves the same on touch as it does with a mouse.
+function NavDropdown({
+  label,
+  links,
+  activeBg,
+  isOpen,
+  onToggle,
+  onClose,
+  isActive,
+}: {
+  label: string;
+  links: NavLink[];
+  activeBg: string;
+  isOpen: boolean;
+  onToggle: () => void;
+  onClose: () => void;
+  isActive: boolean;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [isOpen, onClose]);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={onToggle}
+        className={`${pillClasses(isActive, activeBg)} flex items-center gap-1.5`}
+      >
+        {label}
+        <ChevronIcon open={isOpen} />
+      </button>
+      {isOpen && (
+        <div className="absolute left-0 top-[calc(100%+6px)] z-20 min-w-40 overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)] py-1.5 shadow-lg">
+          {links.map((link) => (
+            <Link
+              key={link.href}
+              href={link.href}
+              onClick={onClose}
+              className="block px-4 py-2 text-sm text-[var(--foreground)] transition-colors hover:bg-[var(--background)]"
+            >
+              {link.label}
+            </Link>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function NavBar() {
   const pathname = usePathname();
   const router = useRouter();
   const { user, logout } = useAuth();
   const [inboxCount, setInboxCount] = useState<number | null>(null);
+  const [openMenu, setOpenMenu] = useState<"pipeline" | "build" | null>(null);
 
   useEffect(() => {
     // No reset-to-null on sign-out: the badge only renders inside the
@@ -49,6 +135,10 @@ export function NavBar() {
     router.push("/");
   }
 
+  const showBuildLinks = user && canAccessDeveloperTools(user.role);
+  const pipelineActive = PIPELINE_LINKS.some((l) => l.href === pathname);
+  const buildActive = BUILD_LINKS.some((l) => l.href === pathname);
+
   return (
     <header className="border-b border-[var(--border)] bg-[var(--surface)]">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-6 px-6 py-4">
@@ -65,40 +155,31 @@ export function NavBar() {
         </Link>
 
         <nav className="flex flex-wrap items-center gap-2 text-sm">
-          {CONTROL_PLANE_LINKS.map((link) => (
-            <Link key={link.href} href={link.href} className={pillClasses(pathname === link.href)}>
-              {link.label}
-            </Link>
-          ))}
+          <NavDropdown
+            label="Pipeline"
+            links={PIPELINE_LINKS}
+            activeBg="bg-[var(--brand)]"
+            isOpen={openMenu === "pipeline"}
+            onToggle={() => setOpenMenu((m) => (m === "pipeline" ? null : "pipeline"))}
+            onClose={() => setOpenMenu(null)}
+            isActive={pipelineActive}
+          />
           <Link
             href="/dashboard"
             className={pillClasses(pathname === "/dashboard", "bg-[var(--accent)]")}
           >
             Observability
           </Link>
-          {user && canAccessDeveloperTools(user.role) && (
-            <Link
-              href="/execution"
-              className={pillClasses(pathname === "/execution", "bg-[var(--accent)]")}
-            >
-              Execute
-            </Link>
-          )}
-          {user && canAccessDeveloperTools(user.role) && (
-            <Link
-              href="/mlops"
-              className={pillClasses(pathname === "/mlops", "bg-[var(--accent)]")}
-            >
-              Model Builder
-            </Link>
-          )}
-          {user && (
-            <Link
-              href="/discovery"
-              className={pillClasses(pathname === "/discovery", "bg-[var(--accent)]")}
-            >
-              Discovery
-            </Link>
+          {showBuildLinks && (
+            <NavDropdown
+              label="Build"
+              links={BUILD_LINKS}
+              activeBg="bg-[var(--accent)]"
+              isOpen={openMenu === "build"}
+              onToggle={() => setOpenMenu((m) => (m === "build" ? null : "build"))}
+              onClose={() => setOpenMenu(null)}
+              isActive={buildActive}
+            />
           )}
           {user && (
             <Link

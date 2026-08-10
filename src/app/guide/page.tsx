@@ -122,9 +122,9 @@ const ROADMAP: RoadmapStep[] = [
   },
   {
     n: 6,
-    title: "Execution",
+    title: "Agentic System",
     description:
-      "Developer/Admin-only. Click \"Run execution\" to watch a real master agent plan the steps, then real sub-agent LLM calls execute each one live (tokens streaming in as they're generated, real tool calls, real cost) - with a live two-node diagram showing exactly which node is active and lighting up the moment a real tool call is in flight. The Automation trigger panel here lets you generate a real webhook token so an execution can start from a curl call or a real cron service instead of a click - the same real event triggering an interviewer would expect of an agent that's an actual product, not a demo.",
+      "Developer/Admin-only. Click \"Run execution\" to watch a real master agent plan the steps, then real sub-agent LLM calls execute each one live (tokens streaming in as they're generated, real cost) - with a live two-node diagram showing exactly which node is active. Each sub-agent has exactly one real callable tool, a genuine knowledge-base RAG lookup; the other tool names on a plan (a CRM, a ticketing system) are the recommendation's descriptive label for what a production build would call, not a live integration - see the page's own caveat for the precise boundary. The Automation trigger panel here lets you generate a real webhook token so an execution can start from a curl call or a real cron service instead of a click.",
     role: ROLE_LABELS.developer,
     href: "/execution",
   },
@@ -162,7 +162,7 @@ const ROLE_GUIDE: RoleGuide[] = [
   },
   {
     role: "developer",
-    pages: "Execution, Model Builder, Observability",
+    pages: "Agentic System, Model Builder, Observability",
     benefit: "The only role that can actually run an approved use case and watch a real multi-agent execution happen, or wire up a webhook so it can start itself.",
   },
   {
@@ -247,7 +247,7 @@ const CONCEPTS: ConceptGuide[] = [
     description:
       "This is the concrete version of \"the agent may have access to everything, so we need tagging that says it's only allowed to read this\": every planned step's tool is checked against the recommendation's approved tool stack, both when the plan is parsed and again when it's persisted. An unlisted tool name is dropped or the whole plan is rejected - not silently trusted.",
     href: "/execution",
-    linkLabel: "See it on Execution",
+    linkLabel: "See it on the Agentic System page",
   },
   {
     title: "Kill-switch",
@@ -263,7 +263,7 @@ const CONCEPTS: ConceptGuide[] = [
     description:
       "A Developer/Admin can generate a real bearer token scoped to one use case, then start a real execution from outside the browser - curl, a real cron service, GitHub Actions - with zero human clicking \"Run execution.\" Same governance checks apply either way.",
     href: "/execution",
-    linkLabel: "See it on Execution",
+    linkLabel: "See it on the Agentic System page",
   },
   {
     title: "AI Gateway",
@@ -406,7 +406,60 @@ const QUICK_NAV = [
   { id: "pipeline", label: "How it works" },
   { id: "beyond", label: "Beyond the pipeline" },
   { id: "concepts", label: "Governance concepts" },
+  { id: "responsible-ai", label: "Responsible AI" },
   { id: "library", label: "Pattern & Tool Library" },
+];
+
+interface ResponsiblePillar {
+  title: string;
+  description: string;
+  href: string;
+  linkLabel: string;
+}
+
+const RESPONSIBLE_AI_PILLARS: ResponsiblePillar[] = [
+  {
+    title: "Risk-tiered human oversight",
+    description:
+      "Autonomy is earned, not assumed - the OSCAR risk tier computed from your Intake answers sets the HITL tier (from none up to manual, every action needs a human) and the exact list of controls that must be checked off before anything runs. Critical tier adds a named Architecture Review Board sign-off no one else can substitute for.",
+    href: "/gate",
+    linkLabel: "See the governance gate",
+  },
+  {
+    title: "Real-time kill-switch",
+    description:
+      "A Governance Owner or Admin can halt any use case at any time. It's enforced server-side at the moment the next execution step would run, not a UI-only flag - engage it mid-run and the next step genuinely fails to start.",
+    href: "/gate",
+    linkLabel: "See it on the governance gate",
+  },
+  {
+    title: "PII detection and redaction",
+    description:
+      "Data-sensitivity controls aren't a checkbox acknowledgment - every sub-agent's real output is scanned for real PII patterns and redacted before it's persisted or shown, with the detection and match count logged, enforced at runtime, not just declared in an intake questionnaire.",
+    href: "/gate",
+    linkLabel: "See data controls on the governance gate",
+  },
+  {
+    title: "Tamper-evident audit trail",
+    description:
+      "Every governance action - approvals, kill-switch engagement, control acknowledgments - is hash-chained so a modified or deleted entry is detectable, not just logged. A \"Verify chain\" action on the governance gate recomputes every hash live and reports exactly which entry broke, if any.",
+    href: "/gate",
+    linkLabel: "See the governance gate's audit log",
+  },
+  {
+    title: "Reasoning required on every decision",
+    description:
+      "A governance approval isn't a bare click - Critical-tier sign-off and the recommendation's alternatives-considered both require real written reasoning, captured and shown alongside the decision, not inferred after the fact.",
+    href: "/recommendation",
+    linkLabel: "See alternatives-considered on a recommendation",
+  },
+  {
+    title: "Segregation of duties",
+    description:
+      "The person who requested or built a use case is not the one who can approve it - approval roles are checked server-side against the submitter, so self-approval is a rejected request, not a policy on paper.",
+    href: "/gate",
+    linkLabel: "See it enforced on the governance gate",
+  },
 ];
 
 function RoleCard({ guide, index }: { guide: RoleGuide; index: number }) {
@@ -555,6 +608,24 @@ export default function GuidePage() {
         <div className="mt-5 grid gap-4 sm:grid-cols-2">
           {CONCEPTS.map((concept, i) => (
             <ConceptCard key={concept.title} concept={concept} index={i} />
+          ))}
+        </div>
+      </section>
+
+      <section id="responsible-ai" className="mt-12 scroll-mt-20">
+        <h2 className="text-lg font-bold text-[var(--brand-strong)]">Responsible AI</h2>
+        <p className="mt-1 max-w-2xl text-sm text-[var(--muted)]">
+          Governance here isn&apos;t a policy document sitting next to the product &mdash; these six
+          controls are enforced in the running application, server-side, on every use case that
+          passes through it.
+        </p>
+        <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {RESPONSIBLE_AI_PILLARS.map((pillar, i) => (
+            <ConceptCard
+              key={pillar.title}
+              concept={{ title: pillar.title, tag: "Enforced, not declared", description: pillar.description, href: pillar.href, linkLabel: pillar.linkLabel }}
+              index={i}
+            />
           ))}
         </div>
       </section>

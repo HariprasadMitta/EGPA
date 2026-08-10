@@ -315,7 +315,7 @@ export default function ExecutionPage() {
       <div className="mx-auto max-w-2xl px-6 py-16 text-center">
         <h1 className="text-xl font-semibold text-[var(--brand-strong)]">Sign in required</h1>
         <p className="mt-2 text-[var(--muted)]">
-          Execution is single-sign-on access for developers. Sign in to continue.
+          The Agentic System is single-sign-on access for developers. Sign in to continue.
         </p>
         <Link href="/login" className="mt-6 inline-block rounded-full bg-[var(--brand)] px-5 py-2.5 text-sm font-semibold text-white">
           Sign in
@@ -354,8 +354,8 @@ export default function ExecutionPage() {
       <div className="mx-auto max-w-2xl px-6 py-16 text-center">
         <h1 className="text-xl font-semibold text-[var(--brand-strong)]">Governance gate not cleared</h1>
         <p className="mt-2 text-[var(--muted)]">
-          Execution is enforced, not optional &mdash; this use case must clear
-          its governance gate before it can run.
+          The agentic system is gated, not optional &mdash; this use case must
+          clear its governance gate before it can run.
         </p>
         <Link href="/gate" className="mt-6 inline-block rounded-full bg-[var(--brand)] px-5 py-2.5 text-sm font-semibold text-white">
           Go to governance gate
@@ -561,7 +561,7 @@ export default function ExecutionPage() {
     <div className="mx-auto max-w-4xl px-6 py-12">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-[var(--brand-strong)]">Execution</h1>
+          <h1 className="text-2xl font-bold text-[var(--brand-strong)]">Agentic System</h1>
           <p className="mt-1 text-sm text-[var(--muted)]">{useCase.title}</p>
           <p className="mt-1 text-xs text-[var(--muted)]">
             {executions.length} execution{executions.length === 1 ? "" : "s"} run for this use case
@@ -571,6 +571,21 @@ export default function ExecutionPage() {
           <RiskBadge tier={useCase.riskTier} />
           <PipelineTrain bundle={active} />
         </div>
+      </div>
+
+      <div className="mt-6 rounded-xl border border-[var(--tier-medium)]/40 bg-[var(--tier-medium-bg)] p-4 text-sm">
+        <p className="font-semibold text-[var(--tier-medium)]">What&apos;s actually real here</p>
+        <p className="mt-1 text-[var(--foreground)]">
+          Every sub-agent below is a real LangGraph loop making a real LLM call through the AI
+          Gateway, and it has exactly one real callable tool: <code className="rounded bg-[var(--background)] px-1 py-0.5 text-xs">knowledge_base_search</code>,
+          a genuine Pinecone/Cohere RAG lookup, logged to the audit trail on every real
+          invocation. The other tool names you see on each step (a CRM, a ticketing system, an
+          external API) are the recommendation&apos;s descriptive label for what a production
+          build of this agent would call &mdash; this sub-agent reasons about the task and
+          produces its output, but it does not actually reach out to that named system.
+          Nothing here is scripted or canned: the reasoning and text are real, generated live;
+          the boundary is which systems it can genuinely reach.
+        </p>
       </div>
 
       <div className="mt-6 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6">

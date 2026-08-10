@@ -228,6 +228,21 @@ export default function LandingPage() {
               pick.
             </p>
           </div>
+          <div>
+            <h3 className="font-semibold text-[var(--brand-strong)]">
+              Responsible AI, enforced not declared
+            </h3>
+            <p className="mt-2 text-sm text-[var(--muted)]">
+              Risk-tiered human oversight, a real server-side kill-switch, PII detection and
+              redaction on every sub-agent output, a hash-chained tamper-evident audit trail,
+              required written reasoning on every governance decision, and segregation of duties
+              between requester and approver &mdash; see the full{" "}
+              <Link href="/guide#responsible-ai" className="font-semibold text-[var(--accent)]">
+                Responsible AI breakdown in the Guide
+              </Link>
+              .
+            </p>
+          </div>
         </section>
       </div>
     </div>

@@ -54,8 +54,8 @@ const STAGES: FlowStage[] = [
   },
   {
     n: 6,
-    title: "Execution",
-    description: "A real multi-agent run - live token stream, real tool calls, real cost.",
+    title: "Agentic System",
+    description: "A real multi-agent run - live token stream, one real RAG tool call, real cost.",
     href: "/execution",
     color: "var(--series-8)",
   },
