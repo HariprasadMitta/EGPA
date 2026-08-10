@@ -4,7 +4,15 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth";
-import { AgentLoopVisualizer } from "@/components/AgentLoopVisualizer";
+import { AgentLoopVisualizer, IDLE_AGENT_LOOP_STATE, type AgentLoopState } from "@/components/AgentLoopVisualizer";
+import { readSseEvents } from "@/lib/sse";
+
+// Sentinel for a session that exists only in local state, not yet
+// persisted - "+ New session" no longer creates a real
+// ProblemDiscoverySession row until the first message is actually sent, so
+// clicking it a few times and changing your mind doesn't leave empty
+// "New discovery session" rows cluttering the sidebar forever.
+const DRAFT_SESSION_ID = "";
 
 const DISCOVERY_HANDOFF_KEY = "egpa-discovery-handoff-v1";
 
@@ -45,7 +53,9 @@ export default function DiscoveryPage() {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [finalizing, setFinalizing] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [liveActivity, setLiveActivity] = useState<AgentLoopState | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   function loadSessions() {
@@ -69,13 +79,33 @@ export default function DiscoveryPage() {
     if (res.ok) setActive(data);
   }
 
-  async function newSession() {
+  function newSession() {
     setError(null);
-    const res = await fetch("/api/discovery-sessions", { method: "POST" });
-    const data = await res.json();
-    if (res.ok) {
-      setActive(data);
+    // Local-only draft - nothing is persisted until send() actually fires
+    // the first message.
+    setActive({
+      id: DRAFT_SESSION_ID,
+      title: null,
+      status: "active",
+      recommendedPath: null,
+      handedOffUseCaseId: null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      messages: [],
+      pathRationale: null,
+      problemStatement: null,
+      suggestedTitle: null,
+    });
+  }
+
+  async function deleteSession(id: string) {
+    setDeletingId(id);
+    try {
+      await fetch(`/api/discovery-sessions/${id}`, { method: "DELETE" });
+      if (active?.id === id) setActive(null);
       loadSessions();
+    } finally {
+      setDeletingId(null);
     }
   }
 
@@ -84,21 +114,57 @@ export default function DiscoveryPage() {
     const message = input.trim();
     setSending(true);
     setError(null);
+    setLiveActivity(IDLE_AGENT_LOOP_STATE);
     try {
-      const res = await fetch(`/api/discovery-sessions/${active.id}/messages`, {
+      let sessionId = active.id;
+      if (!sessionId) {
+        const createRes = await fetch("/api/discovery-sessions", { method: "POST" });
+        const createData = await createRes.json();
+        if (!createRes.ok) throw new Error(createData.error || "Failed to create session.");
+        sessionId = createData.id as string;
+        setActive((prev) => (prev ? { ...prev, id: sessionId } : prev));
+      }
+
+      const res = await fetch(`/api/discovery-sessions/${sessionId}/messages`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ message }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      setActive({ ...active, messages: data.messages, title: data.title });
-      setInput("");
-      loadSessions();
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({ error: "Failed to send message." }));
+        throw new Error(data.error);
+      }
+
+      for await (const event of readSseEvents(res)) {
+        if (event.type === "thinking") {
+          setLiveActivity((prev) => ({ ...(prev ?? IDLE_AGENT_LOOP_STATE), node: "agent" }));
+        } else if (event.type === "tool_call") {
+          setLiveActivity((prev) => ({
+            ...(prev ?? IDLE_AGENT_LOOP_STATE),
+            node: "tools",
+            toolName: event.toolName as string,
+            toolStatus: "calling",
+          }));
+        } else if (event.type === "tool_result") {
+          setLiveActivity((prev) => ({
+            ...(prev ?? IDLE_AGENT_LOOP_STATE),
+            toolStatus: "done",
+            toolResultPreview: event.result as string,
+          }));
+        } else if (event.type === "done") {
+          const messages = event.messages as DiscoveryChatMessage[];
+          setActive((prev) => (prev ? { ...prev, id: sessionId, messages, title: event.title as string } : prev));
+          setInput("");
+          loadSessions();
+        } else if (event.type === "error") {
+          throw new Error(event.error as string);
+        }
+      }
     } catch (err) {
       setError((err as Error).message);
     } finally {
       setSending(false);
+      setLiveActivity(null);
     }
   }
 
@@ -167,23 +233,40 @@ export default function DiscoveryPage() {
           + New session
         </button>
         <div className="mt-4 space-y-1.5">
+          {active?.id === DRAFT_SESSION_ID && (
+            <div className="rounded-md border border-[var(--brand)] bg-[var(--background)] px-3 py-2 text-left text-xs">
+              <p className="truncate font-medium">New discovery session</p>
+              <p className="mt-0.5 text-[var(--muted)]">Not saved yet - send a message to start it</p>
+            </div>
+          )}
           {sessions.map((s) => (
-            <button
+            <div
               key={s.id}
-              onClick={() => selectSession(s.id)}
-              className={`block w-full rounded-md border px-3 py-2 text-left text-xs transition-colors ${
+              className={`group flex items-center gap-1 rounded-md border transition-colors ${
                 active?.id === s.id
                   ? "border-[var(--brand)] bg-[var(--background)]"
                   : "border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--background)]"
               }`}
             >
-              <p className="truncate font-medium">{s.title ?? "New discovery session"}</p>
-              <p className="mt-0.5 text-[var(--muted)]">
-                {s.status === "completed" ? PATH_LABELS[s.recommendedPath ?? ""] ?? "Completed" : "In progress"}
-              </p>
-            </button>
+              <button onClick={() => selectSession(s.id)} className="min-w-0 flex-1 px-3 py-2 text-left text-xs">
+                <p className="truncate font-medium">{s.title ?? "New discovery session"}</p>
+                <p className="mt-0.5 text-[var(--muted)]">
+                  {s.status === "completed" ? PATH_LABELS[s.recommendedPath ?? ""] ?? "Completed" : "In progress"}
+                </p>
+              </button>
+              <button
+                onClick={() => deleteSession(s.id)}
+                disabled={deletingId === s.id}
+                title="Delete session"
+                className="flex-none px-2 text-[var(--muted)] opacity-0 transition-opacity hover:text-[var(--tier-critical)] group-hover:opacity-100 disabled:opacity-60"
+              >
+                &times;
+              </button>
+            </div>
           ))}
-          {sessions.length === 0 && <p className="text-xs text-[var(--muted)]">No sessions yet.</p>}
+          {sessions.length === 0 && active?.id !== DRAFT_SESSION_ID && (
+            <p className="text-xs text-[var(--muted)]">No sessions yet.</p>
+          )}
         </div>
       </div>
 
@@ -217,7 +300,10 @@ export default function DiscoveryPage() {
                     <p className="mt-1 pl-1 text-[11px] text-[var(--muted)]">{m.content}</p>
                   </div>
                 ) : (
-                  <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+                  <div key={i} className={`flex flex-col ${m.role === "user" ? "items-end" : "items-start"}`}>
+                    <span className="mb-1 px-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+                      {m.role === "user" ? (user?.name ?? "You") : "Discovery Advisor"}
+                    </span>
                     <div
                       className={`max-w-[80%] rounded-xl px-4 py-2.5 text-sm ${
                         m.role === "user"
@@ -232,6 +318,19 @@ export default function DiscoveryPage() {
               )}
               <div ref={bottomRef} />
             </div>
+
+            {sending && liveActivity && (
+              <div className="mt-3">
+                <AgentLoopVisualizer leftLabel="Discovery Advisor" state={liveActivity} />
+                <p className="mt-1 pl-1 text-[11px] text-[var(--muted)]">
+                  {liveActivity.toolStatus === "calling"
+                    ? "Searching existing use cases..."
+                    : liveActivity.toolStatus === "done"
+                      ? "Composing a reply..."
+                      : "Thinking..."}
+                </p>
+              </div>
+            )}
 
             {error && <p className="mt-3 text-xs text-[var(--tier-critical)]">{error}</p>}
 
@@ -251,7 +350,7 @@ export default function DiscoveryPage() {
                   disabled={sending || !input.trim()}
                   className="rounded-full bg-[var(--brand)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
                 >
-                  {sending ? "Thinking..." : "Send"}
+                  {sending ? "Working..." : "Send"}
                 </button>
                 <button
                   onClick={wrapUp}

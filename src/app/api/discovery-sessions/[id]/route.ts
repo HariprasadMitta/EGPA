@@ -60,3 +60,20 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
   return Response.json({ handedOffUseCaseId: updated.handedOffUseCaseId });
 }
+
+// Real delete - lets someone clean up an abandoned session instead of it
+// sitting in the sidebar forever. Owner-only, same as every other mutation
+// here.
+export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const session = await auth();
+  if (!session?.user) return Response.json({ error: "Sign in required." }, { status: 401 });
+
+  const { id } = await params;
+  const existing = await prisma.problemDiscoverySession.findUnique({ where: { id } });
+  if (!existing || existing.userId !== session.user.id) {
+    return Response.json({ error: "Discovery session not found." }, { status: 404 });
+  }
+
+  await prisma.problemDiscoverySession.delete({ where: { id } });
+  return Response.json({ ok: true });
+}

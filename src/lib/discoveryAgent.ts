@@ -22,7 +22,8 @@ built - ask clarifying questions, push back on vague requests, and check whether
 already covers this need.
 
 You have exactly one real tool: search_existing_use_cases. To use it, respond with ONLY this JSON
-object and nothing else: {"tool_call": {"name": "search_existing_use_cases", "query": "<search text>"}}
+object and NOTHING else - no preamble like "let me check", no explanation before or after it, just
+the raw JSON on its own: {"tool_call": {"name": "search_existing_use_cases", "query": "<search text>"}}
 Only call it once you understand the problem well enough to search meaningfully - never on the
 very first message before asking at least one clarifying question.
 
@@ -54,11 +55,51 @@ Path definitions:
 
 Respond with valid JSON on a single logical structure - do not put a literal line break inside any string value, use the sequence \\n if you need one.`;
 
-function tryParseToolCall(text: string): { query: string } | null {
-  const trimmed = text.trim();
-  if (!trimmed.startsWith("{")) return null;
+// Locates the {"tool_call": {...}} object anywhere inside a real model
+// response and returns just that substring - real, observed failure mode:
+// a smaller model sometimes wraps the JSON in prose ("Let me check...
+// {"tool_call": ...}") despite being told not to, which a naive
+// text.startsWith("{") check misses entirely, silently leaking the raw
+// JSON into the visible chat AND never actually firing the tool. A
+// balanced-brace scan (respecting string boundaries, same technique as
+// extractJson's sanitizer) finds it regardless of what surrounds it.
+export function findToolCallJson(text: string): string | null {
+  const marker = '{"tool_call"';
+  const start = text.indexOf(marker);
+  if (start === -1) return null;
+
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let i = start; i < text.length; i++) {
+    const char = text[i];
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (char === "\\") {
+        escaped = true;
+      } else if (char === '"') {
+        inString = false;
+      }
+      continue;
+    }
+    if (char === '"') {
+      inString = true;
+    } else if (char === "{") {
+      depth++;
+    } else if (char === "}") {
+      depth--;
+      if (depth === 0) return text.slice(start, i + 1);
+    }
+  }
+  return null;
+}
+
+export function tryParseToolCall(text: string): { query: string } | null {
+  const candidate = findToolCallJson(text);
+  if (!candidate) return null;
   try {
-    const parsed = JSON.parse(trimmed);
+    const parsed = JSON.parse(candidate);
     if (parsed?.tool_call?.name === "search_existing_use_cases" && typeof parsed.tool_call.query === "string") {
       return { query: parsed.tool_call.query };
     }
@@ -78,20 +119,42 @@ function toThreadMessages(history: DiscoveryChatMessage[]): ChatMessage[] {
   ];
 }
 
+// Real, live turn-state telemetry - additive event stream so the UI can
+// show what's actually happening right now (thinking / calling the real
+// tool / composing the reply) instead of a static "Thinking..." label with
+// no visibility into which phase a turn is in. Every consumer of the old
+// one-shot runDiscoveryTurn was this session's own API route, so this
+// fully replaces it rather than living alongside it.
+export type DiscoveryTurnEvent =
+  | { type: "thinking" }
+  | { type: "tool_call"; toolName: string; query: string }
+  | { type: "tool_result"; toolName: string; result: string }
+  | { type: "done"; messages: DiscoveryChatMessage[]; reply: string; provider: string }
+  | { type: "error"; error: string };
+
 // Bounded (max one tool call per turn) real agent loop: send the
 // conversation, and if the model asks for search_existing_use_cases, run
-// the real DB search, feed the real result back, and get a final reply.
-export async function runDiscoveryTurn(
+// the real DB search, feed the real result back, and get a final reply -
+// yielding a real event at each phase transition.
+export async function* runDiscoveryTurn(
   userId: string,
   history: DiscoveryChatMessage[],
   userMessage: string
-): Promise<{ messages: DiscoveryChatMessage[]; reply: string; provider: string }> {
+): AsyncGenerator<DiscoveryTurnEvent> {
   const working: DiscoveryChatMessage[] = [...history, { role: "user", content: userMessage }];
 
-  let result = await gatewayChatThread(toThreadMessages(working), 500);
+  yield { type: "thinking" };
+  let result;
+  try {
+    result = await gatewayChatThread(toThreadMessages(working), 500);
+  } catch (err) {
+    yield { type: "error", error: `Discovery Advisor error: ${(err as Error).message}` };
+    return;
+  }
   const toolCall = tryParseToolCall(result.text);
 
   if (toolCall) {
+    yield { type: "tool_call", toolName: "search_existing_use_cases", query: toolCall.query };
     const matches = await searchExistingUseCases(userId, toolCall.query);
     const toolResultText =
       matches.length === 0
@@ -99,12 +162,20 @@ export async function runDiscoveryTurn(
         : `Found ${matches.length} existing use case(s) matching "${toolCall.query}":\n${matches
             .map((m) => `- ${m.title} (${m.status}, ${m.riskTier} tier, ${m.businessDomain})`)
             .join("\n")}`;
+    yield { type: "tool_result", toolName: "search_existing_use_cases", result: toolResultText };
     working.push({ role: "tool", content: toolResultText });
-    result = await gatewayChatThread(toThreadMessages(working), 500);
+
+    yield { type: "thinking" };
+    try {
+      result = await gatewayChatThread(toThreadMessages(working), 500);
+    } catch (err) {
+      yield { type: "error", error: `Discovery Advisor error: ${(err as Error).message}` };
+      return;
+    }
   }
 
   working.push({ role: "assistant", content: result.text });
-  return { messages: working, reply: result.text, provider: result.provider };
+  yield { type: "done", messages: working, reply: result.text, provider: result.provider };
 }
 
 function isValidFinalization(value: unknown): value is DiscoveryFinalization {

@@ -10,11 +10,15 @@ function deriveTitle(messages: DiscoveryChatMessage[]): string {
   return firstUser.content.length > 60 ? `${firstUser.content.slice(0, 60)}...` : firstUser.content;
 }
 
-// Real turn in the Discovery Advisor's chat - an actual LLM call through
-// the same AI Gateway every other agent path in this platform uses (see
-// src/lib/discoveryAgent.ts), not a scripted flow. Persists the full real
-// transcript (including any search_existing_use_cases tool call/result)
-// after every turn so a session survives a page refresh.
+// Real turn in the Discovery Advisor's chat, streamed as SSE - an actual
+// LLM call through the same AI Gateway every other agent path in this
+// platform uses (see src/lib/discoveryAgent.ts), not a scripted flow.
+// Streaming (rather than one JSON response) is what lets the UI show real
+// turn-state (thinking / calling the real tool / composing the reply)
+// instead of a static "Thinking..." label with no visibility into what
+// phase a turn is in - same reasoning as /api/execute-step's SSE stream.
+// Persists the full real transcript (including any tool call/result) once
+// the turn completes, so a session survives a page refresh.
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session?.user) return Response.json({ error: "Sign in required." }, { status: 401 });
@@ -39,23 +43,39 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   const history = row.messages as unknown as DiscoveryChatMessage[];
 
-  try {
-    const { messages, reply } = await runDiscoveryTurn(session.user.id, history, message);
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream({
+    async start(controller) {
+      function send(data: object) {
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+      }
 
-    const updated = await prisma.problemDiscoverySession.update({
-      where: { id },
-      data: {
-        messages: messages as unknown as object,
-        title: row.title ?? deriveTitle(messages),
-      },
-    });
+      try {
+        for await (const event of runDiscoveryTurn(session.user.id, history, message)) {
+          if (event.type === "done") {
+            const updated = await prisma.problemDiscoverySession.update({
+              where: { id },
+              data: {
+                messages: event.messages as unknown as object,
+                title: row.title ?? deriveTitle(event.messages),
+              },
+            });
+            send({ type: "done", reply: event.reply, messages: event.messages, title: updated.title });
+          } else {
+            send(event);
+          }
+        }
+      } finally {
+        controller.close();
+      }
+    },
+  });
 
-    return Response.json({
-      reply,
-      messages,
-      title: updated.title,
-    });
-  } catch (err) {
-    return Response.json({ error: `Discovery Advisor error: ${(err as Error).message}` }, { status: 502 });
-  }
+  return new Response(stream, {
+    headers: {
+      "content-type": "text/event-stream",
+      "cache-control": "no-cache, no-transform",
+      connection: "keep-alive",
+    },
+  });
 }
