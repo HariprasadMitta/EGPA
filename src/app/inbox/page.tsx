@@ -40,8 +40,12 @@ export default function InboxPage() {
     router.push(TYPE_HREF[item.type]);
   }
 
+  const userId = user?.id;
   useEffect(() => {
-    if (!user) return;
+    // Depends on userId, not the user object - useAuth() returns a new
+    // object literal every render, which would re-fire this effect (and
+    // re-fetch) forever since the fetch's own setState triggers a re-render.
+    if (!userId) return;
     fetch("/api/action-inbox")
       .then(async (r) => {
         const body = await r.json();
@@ -50,7 +54,7 @@ export default function InboxPage() {
       })
       .then(setItems)
       .catch((e) => setError(e.message));
-  }, [user]);
+  }, [userId]);
 
   if (!user) {
     return (

@@ -678,11 +678,19 @@ export default function AdminPage() {
 
   return (
     <div className="mx-auto max-w-4xl px-6 py-12 space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-[var(--brand-strong)]">Admin Console</h1>
-        <p className="mt-1 text-sm text-[var(--muted)]">
-          Real platform configuration &mdash; notifications, budgets, public API access, and data retention.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-[var(--brand-strong)]">Admin Console</h1>
+          <p className="mt-1 text-sm text-[var(--muted)]">
+            Real platform configuration &mdash; notifications, budgets, public API access, and data retention.
+          </p>
+        </div>
+        <Link
+          href="/admin/overview"
+          className="rounded-full border border-[var(--border)] bg-[var(--surface)] px-4 py-2 text-sm font-semibold text-[var(--foreground)] transition-colors hover:bg-[var(--background)]"
+        >
+          View overview dashboard &rarr;
+        </Link>
       </div>
       <NotificationSection />
       <UserConsumptionSection />

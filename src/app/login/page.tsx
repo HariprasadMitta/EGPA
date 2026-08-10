@@ -13,11 +13,14 @@ export default function LoginPage() {
   const [submitting, setSubmitting] = useState(false);
 
   // Already signed in (e.g. navigated back here manually, or a stale tab) -
-  // don't show a sign-in form for a session that already exists.
+  // don't show a sign-in form for a session that already exists. Depends on
+  // user?.role (a stable primitive), not the user object itself - useAuth()
+  // returns a new object literal every render.
+  const userRole = user?.role;
   useEffect(() => {
-    if (!user) return;
-    window.location.href = user.role === "developer" || user.role === "arb" || user.role === "admin" ? "/portfolio" : "/intake";
-  }, [user]);
+    if (!userRole) return;
+    window.location.href = userRole === "developer" || userRole === "arb" || userRole === "admin" ? "/portfolio" : "/intake";
+  }, [userRole]);
 
   if (user) return null;
 

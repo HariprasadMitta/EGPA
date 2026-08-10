@@ -113,11 +113,16 @@ export function NavBar() {
   const [inboxCount, setInboxCount] = useState<number | null>(null);
   const [openMenu, setOpenMenu] = useState<"pipeline" | "build" | null>(null);
 
+  const userId = user?.id;
   useEffect(() => {
     // No reset-to-null on sign-out: the badge only renders inside the
     // `user &&` block below, so a stale count is simply never shown once
-    // signed out - no need to trigger an extra render for it.
-    if (!user) return;
+    // signed out - no need to trigger an extra render for it. Depends on
+    // userId (a stable primitive), not the user object itself - useAuth()
+    // returns a brand-new object literal every render, so depending on the
+    // object would re-fire this effect (and re-fetch) on every render,
+    // forever, since the fetch's own setState triggers the next render.
+    if (!userId) return;
     let cancelled = false;
     fetch("/api/action-inbox")
       .then((r) => r.json())
@@ -128,7 +133,7 @@ export function NavBar() {
     return () => {
       cancelled = true;
     };
-  }, [user, pathname]);
+  }, [userId, pathname]);
 
   function handleSignOut() {
     logout();

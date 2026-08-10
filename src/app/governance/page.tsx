@@ -308,8 +308,13 @@ export default function GovernancePosturePage() {
   const [data, setData] = useState<PostureData | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const userId = user?.id;
+  const userRole = user?.role;
   useEffect(() => {
-    if (!user || !canSeeAllUseCases(user.role)) return;
+    // Depends on userId/userRole, not the user object - useAuth() returns a
+    // new object literal every render, which would re-fire this effect (and
+    // re-fetch) forever since the fetch's own setState triggers a re-render.
+    if (!userId || !userRole || !canSeeAllUseCases(userRole)) return;
     fetch("/api/governance-posture")
       .then(async (r) => {
         const body = await r.json();
@@ -318,7 +323,7 @@ export default function GovernancePosturePage() {
       })
       .then(setData)
       .catch((e) => setError(e.message));
-  }, [user]);
+  }, [userId, userRole]);
 
   if (!user) {
     return (

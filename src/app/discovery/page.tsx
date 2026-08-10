@@ -64,9 +64,13 @@ export default function DiscoveryPage() {
       .then((d) => setSessions(d.sessions ?? []));
   }
 
+  const userId = user?.id;
   useEffect(() => {
-    if (user) loadSessions();
-  }, [user]);
+    // Depends on userId, not the user object - useAuth() returns a new
+    // object literal every render, which would re-fire this effect (and
+    // re-fetch) forever since a fetch inside can trigger a re-render.
+    if (userId) loadSessions();
+  }, [userId]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
