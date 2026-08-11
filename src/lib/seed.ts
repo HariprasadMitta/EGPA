@@ -1,6 +1,56 @@
 import { GOVERNANCE_TEMPLATES, classifyRisk } from "@/lib/governance";
-import { ADR, GovernanceGate, Recommendation, RiskComplianceDetails, UseCase, UseCaseBundle } from "@/types";
+import { ADR, ExecutionRun, GovernanceGate, Recommendation, RiskComplianceDetails, UseCase, UseCaseBundle, UseCaseStatus } from "@/types";
 import { buildADRContent } from "@/lib/adr";
+
+// Fabricates a plausible-looking completed ExecutionRun for a sample bundle
+// - client-only display data, same as the rest of makeBundle's output,
+// never written anywhere real. Exists so "more execution history" on a
+// sample looks like the real ExecutionCard the Agentic System page renders,
+// not an empty list, without inventing a whole fake execution engine.
+function sampleRun(params: {
+  useCaseId: string;
+  runNumber: number;
+  startedAt: string;
+  masterAgentSummary: string;
+  steps: { name: string; tool: string; task: string; rationale: string; output: string; provider: string; inputTokens: number; outputTokens: number; costUsd: number; durationMs: number }[];
+}): ExecutionRun {
+  const totalInputTokens = params.steps.reduce((s, st) => s + st.inputTokens, 0);
+  const totalOutputTokens = params.steps.reduce((s, st) => s + st.outputTokens, 0);
+  const totalCostUsd = params.steps.reduce((s, st) => s + st.costUsd, 0);
+  const totalDurationMs = params.steps.reduce((s, st) => s + st.durationMs, 0);
+  return {
+    id: `${params.useCaseId}-run-${params.runNumber}`,
+    runNumber: params.runNumber,
+    useCaseId: params.useCaseId,
+    masterAgentSummary: params.masterAgentSummary,
+    status: "completed",
+    startedAt: params.startedAt,
+    completedAt: new Date(new Date(params.startedAt).getTime() + totalDurationMs).toISOString(),
+    totalInputTokens,
+    totalOutputTokens,
+    totalCostUsd,
+    error: null,
+    dryRun: false,
+    steps: params.steps.map((s, i) => ({
+      id: `${params.useCaseId}-run-${params.runNumber}-step-${i + 1}`,
+      name: s.name,
+      tool: s.tool,
+      task: s.task,
+      rationale: s.rationale,
+      status: "done",
+      output: s.output,
+      provider: s.provider,
+      inputTokens: s.inputTokens,
+      outputTokens: s.outputTokens,
+      costUsd: s.costUsd,
+      durationMs: s.durationMs,
+      toolCallCount: 1,
+      confidenceScore: 0.82 + i * 0.03,
+      piiDetected: false,
+      piiMatchCount: 0,
+    })),
+  };
+}
 
 function makeBundle(params: {
   id: string;
@@ -17,6 +67,8 @@ function makeBundle(params: {
   recommendation: Omit<Recommendation, "useCaseId" | "createdAt" | "version">;
   acknowledged: boolean;
   riskComplianceDetails: Omit<RiskComplianceDetails, "useCaseId" | "createdAt">;
+  statusOverride?: UseCaseStatus;
+  executions?: ExecutionRun[];
 }): UseCaseBundle {
   const riskTier = classifyRisk({
     dataSensitivity: params.dataSensitivity,
@@ -39,7 +91,7 @@ function makeBundle(params: {
     owner: params.owner,
     steward: params.steward,
     riskTier,
-    status: params.acknowledged ? "approved" : "gated",
+    status: params.statusOverride ?? (params.acknowledged ? "approved" : "gated"),
     killSwitchEngaged: false,
     createdAt: params.createdAt,
     // Sample bundles are client-only display data, never a real DB row -
@@ -95,7 +147,7 @@ function makeBundle(params: {
       }
     : null;
 
-  return { useCase, recommendation, gate, adr, executions: [], webhookTrigger: null, riskComplianceDetails };
+  return { useCase, recommendation, gate, adr, executions: params.executions ?? [], webhookTrigger: null, riskComplianceDetails };
 }
 
 export const SAMPLE_BUNDLES: UseCaseBundle[] = [
@@ -113,6 +165,66 @@ export const SAMPLE_BUNDLES: UseCaseBundle[] = [
     steward: "Marcus Chen (Solutions Architect)",
     createdAt: "2026-07-14T15:00:00.000Z",
     acknowledged: true,
+    statusOverride: "executed",
+    executions: [
+      sampleRun({
+        useCaseId: "sample-complaint-triage",
+        runNumber: 1,
+        startedAt: "2026-07-15T09:12:00.000Z",
+        masterAgentSummary:
+          "Plan: classify the inbound complaint's severity/department, redact any PII before it leaves the ticketing system boundary, draft a response for human review, then route to the right queue.",
+        steps: [
+          {
+            name: "Severity classifier",
+            tool: "Sentiment/severity classifier",
+            task: "Classify severity and department for the inbound complaint.",
+            rationale: "Every downstream step depends on knowing severity/department first.",
+            output: "Classified as Medium severity, Card Disputes department - customer reports a declined transaction they believe was authorized.",
+            provider: "anthropic/claude-3-5-haiku",
+            inputTokens: 612,
+            outputTokens: 84,
+            costUsd: 0.0009,
+            durationMs: 1400,
+          },
+          {
+            name: "PII redaction",
+            tool: "PII redaction service",
+            task: "Redact any PII in the complaint text before it's used downstream.",
+            rationale: "Confidential data sensitivity requires redaction before the text touches the draft-response step.",
+            output: "Redacted 1 card-number-like pattern and 1 phone number from the complaint text; redacted version stored for downstream steps.",
+            provider: "anthropic/claude-3-5-haiku",
+            inputTokens: 540,
+            outputTokens: 112,
+            costUsd: 0.001,
+            durationMs: 1100,
+          },
+          {
+            name: "Response drafter",
+            tool: "Response draft generator",
+            task: "Draft a suggested response for the human reviewer.",
+            rationale: "Human-approves-each-action autonomy means this step only ever produces a suggestion, never a sent reply.",
+            output: "Drafted an acknowledgment + next-steps response citing the disputed transaction date, pending human review before send.",
+            provider: "openrouter/meta-llama/llama-3.3-70b-instruct",
+            inputTokens: 890,
+            outputTokens: 210,
+            costUsd: 0.0021,
+            durationMs: 2300,
+          },
+          {
+            name: "Queue router",
+            tool: "Queue routing API",
+            task: "Route the ticket to the Card Disputes queue with the classified priority.",
+            rationale: "Final step - hands off to the human queue rather than closing the loop itself.",
+            output: "Routed to Card Disputes queue, priority Medium, drafted response attached for reviewer approval.",
+            provider: "anthropic/claude-3-5-haiku",
+            inputTokens: 320,
+            outputTokens: 58,
+            costUsd: 0.0006,
+            durationMs: 800,
+          },
+        ],
+      }),
+    ],
     recommendation: {
       framework: "LangGraph",
       tools: [
@@ -231,6 +343,42 @@ export const SAMPLE_BUNDLES: UseCaseBundle[] = [
     steward: "Ravi Deshmukh (Data Platform Engineer)",
     createdAt: "2026-07-24T13:45:00.000Z",
     acknowledged: true,
+    statusOverride: "executed",
+    executions: [
+      sampleRun({
+        useCaseId: "sample-expense-anomaly",
+        runNumber: 1,
+        startedAt: "2026-07-25T08:05:00.000Z",
+        masterAgentSummary:
+          "Plan: pull this week's submitted expense reports, score each against its peer-group baseline, and produce a plain-language explanation for every flagged anomaly.",
+        steps: [
+          {
+            name: "Baseline scorer",
+            tool: "Anomaly scoring model",
+            task: "Score each submitted expense report against its peer-group spending baseline.",
+            rationale: "Read-only autonomy - this step only ever scores, it never writes back to the expense system.",
+            output: "Scored 148 reports; 3 exceeded the peer-group threshold (2 travel, 1 client-entertainment).",
+            provider: "groq/llama-3.3-70b-versatile",
+            inputTokens: 1240,
+            outputTokens: 96,
+            costUsd: 0.0004,
+            durationMs: 900,
+          },
+          {
+            name: "Explanation generator",
+            tool: "Plain-language explanation generator",
+            task: "Produce a plain-language explanation for each flagged anomaly, citing the specific line items.",
+            rationale: "Suggest-only autonomy - explanation exists to help a human reviewer decide, not to decide itself.",
+            output: "Generated 3 explanations, each citing the specific merchant/amount/peer-group baseline that triggered the flag.",
+            provider: "groq/llama-3.3-70b-versatile",
+            inputTokens: 780,
+            outputTokens: 340,
+            costUsd: 0.0006,
+            durationMs: 1600,
+          },
+        ],
+      }),
+    ],
     recommendation: {
       framework: "AutoGen",
       tools: [
@@ -272,6 +420,65 @@ export const SAMPLE_BUNDLES: UseCaseBundle[] = [
       agentWriteAccessProduction: false,
       securityReviewCompleted: true,
       accountableOwner: "Helen Osei (Finance Controller)",
+      usersToldAboutAi: true,
+    },
+  }),
+  makeBundle({
+    id: "sample-loan-preapproval",
+    title: "Loan Pre-Approval Eligibility Screener",
+    description:
+      "An agent that screens incoming personal-loan applications against eligibility criteria and produces a preliminary pre-approval or decline recommendation shown to the applicant before a human underwriter's real decision. Business unit: Retail Banking Lending.",
+    businessDomain: "Retail Banking - Lending",
+    dataSensitivity: "regulated",
+    autonomyLevel: "human-approves-batches",
+    integrationSurface: "external-customer-facing",
+    expectedUsers: "org-wide",
+    owner: "Sipho Radebe (Head of Retail Lending)",
+    steward: "Marcus Chen (Solutions Architect)",
+    createdAt: "2026-07-28T11:20:00.000Z",
+    acknowledged: false,
+    statusOverride: "rejected",
+    recommendation: {
+      framework: "LangGraph",
+      tools: [
+        "Credit bureau lookup API",
+        "Income verification service",
+        "Eligibility rules engine",
+        "Pre-approval decision explainer",
+      ],
+      harnessPattern: "Single-agent with mandatory human batch review before any applicant sees a result",
+      loopPattern: "Plan-then-execute, no reflection needed - eligibility rules are deterministic",
+      iterationCeiling: 5,
+      contextStrategy: "Full context per application, no cross-application carryover",
+      rationale:
+        "Regulated data plus a customer-facing decision that directly affects credit access computes to High risk - the harness must keep every recommendation behind a human batch review before an applicant ever sees it, even though the underlying eligibility check itself is deterministic and low-complexity.",
+      alternativesConsidered:
+        "A fully-autonomous suggest-to-applicant flow was considered but rejected outright - a customer-impact credit decision cannot bypass human review regardless of how deterministic the rules engine is. A supervisor + worker pattern was also considered but rejected as unnecessary complexity for a single deterministic rules check.",
+    },
+    riskComplianceDetails: {
+      regulatoryFrameworks: ["National Credit Act", "FSCA Conduct Standards"],
+      dataResidency: "South Africa",
+      dataSources: ["internal", "credit-bureau"],
+      sensitiveDataElements: "Applicant ID numbers, income data, credit bureau scores",
+      retentionInputsDays: 365,
+      retentionOutputsDays: 365,
+      retentionLogsDays: 1825,
+      modelSourcing: "third-party-api",
+      modelVendor: "Anthropic (via the AI Gateway)",
+      customerImpactDecision: true,
+      humanOversightFrequency: "sampled",
+      humanReviewSamplePercent: 25,
+      escalationOwner: "Sipho Radebe (Head of Retail Lending)",
+      explainabilityRequirement: "Every pre-approval or decline must cite the specific eligibility criteria that drove it, in plain language",
+      biasFairnessTestingPlan: "Not yet completed - flagged during governance review as a blocking gap given National Credit Act fair-lending requirements",
+      preProductionValidation: "Not yet completed",
+      expectedUsageVolume: "~2,000 applications/week",
+      businessCriticality: "Business-critical - directly affects credit access decisions",
+      fallbackRollbackPlan: "Revert to fully manual underwriting - no dependency created since this agent only screens, never decides",
+      encryptedAtRestInTransit: true,
+      agentWriteAccessProduction: false,
+      securityReviewCompleted: false,
+      accountableOwner: "Sipho Radebe (Head of Retail Lending)",
       usersToldAboutAi: true,
     },
   }),
