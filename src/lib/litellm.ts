@@ -20,7 +20,16 @@ export interface GatewayCompletionResult {
 // Multi-turn variant - takes the full message history so callers (the
 // Discovery Advisor's chat, in particular) can carry conversation context
 // across turns instead of being limited to one system + one user message.
-export async function gatewayChatThread(messages: ChatMessage[], maxTokens: number): Promise<GatewayCompletionResult> {
+// `model` defaults to the standard "egpa-primary" alias - callers that want
+// a different real alias configured in litellm-config.yaml (e.g. a
+// cheaper/faster one for a lightweight use case like the help chatbot) can
+// pass it explicitly; the alias itself still has to exist on the deployed
+// Gateway, this just stops every caller from being hardcoded to one model.
+export async function gatewayChatThread(
+  messages: ChatMessage[],
+  maxTokens: number,
+  model: string = "egpa-primary"
+): Promise<GatewayCompletionResult> {
   // Same emergency-only escape hatch as src/lib/agentModel.ts - see there.
   if (process.env.LLM_DIRECT_MODE === "true") {
     return directChatThread(messages, maxTokens);
@@ -39,7 +48,7 @@ export async function gatewayChatThread(messages: ChatMessage[], maxTokens: numb
       authorization: `Bearer ${process.env.LITELLM_VIRTUAL_KEY}`,
     },
     body: JSON.stringify({
-      model: "egpa-primary",
+      model,
       max_tokens: maxTokens,
       messages,
     }),
@@ -48,7 +57,7 @@ export async function gatewayChatThread(messages: ChatMessage[], maxTokens: numb
   if (!res.ok) throw new Error(`AI Gateway call failed: ${await res.text()}`);
 
   const data = await res.json();
-  const modelName = res.headers.get("x-litellm-model-name") ?? "egpa-primary";
+  const modelName = res.headers.get("x-litellm-model-name") ?? model;
   const inputTokens = data?.usage?.prompt_tokens ?? 0;
   const outputTokens = data?.usage?.completion_tokens ?? 0;
   const realCost = data?.usage?.cost;
