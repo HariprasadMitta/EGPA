@@ -2,6 +2,7 @@ import { runStep, StepInput } from "@/lib/agentStep";
 import { prisma } from "@/lib/prisma";
 import { clientIp } from "@/lib/rateLimit";
 import { executionLimiter } from "@/lib/executionLimiter";
+import { publishFlowActivity } from "@/lib/eventBus";
 
 export const runtime = "nodejs";
 
@@ -23,6 +24,7 @@ export async function POST(request: Request) {
     return Response.json({ error: "Missing required fields." }, { status: 400 });
   }
   if (!Array.isArray(body.priorSteps)) body.priorSteps = [];
+  publishFlowActivity("execute");
 
   const run = await prisma.executionRun.findUnique({
     where: { id: body.executionId },

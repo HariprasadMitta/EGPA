@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { USE_CASE_INCLUDE } from "@/lib/dbMapping";
 import { computeTimeSaved, formatHours } from "@/lib/timeSaved";
 import { getReconciliationView } from "@/lib/reconciliation";
+import { publishFlowActivity } from "@/lib/eventBus";
 
 export const runtime = "nodejs";
 
@@ -18,6 +19,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   const { id } = await params;
   const useCase = await prisma.useCase.findUnique({ where: { id }, include: USE_CASE_INCLUDE });
   if (!useCase) return Response.json({ error: "Use case not found." }, { status: 404 });
+  publishFlowActivity("evidence");
 
   const auditLog = await prisma.auditLogEntry.findMany({
     where: { useCaseId: id },

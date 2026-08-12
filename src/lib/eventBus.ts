@@ -9,6 +9,26 @@ export interface UseCaseUpdateEvent {
 
 const CHANNEL = "use-case-update";
 
+// Org-wide, real-time "a real request of this kind just happened" signal -
+// powers ArchitectureDiagramWidget.tsx's live highlighting. Deliberately
+// carries nothing but the flow id (no request payload, no user identity) -
+// it's a presence/activity pulse, not an audit log.
+export type ArchitectureFlow =
+  | "discovery"
+  | "recommendation"
+  | "gate"
+  | "execute"
+  | "governance"
+  | "admin"
+  | "help"
+  | "evidence";
+
+export interface FlowActivityEvent {
+  flow: ArchitectureFlow;
+}
+
+const ACTIVITY_CHANNEL = "architecture-flow-activity";
+
 // Real Redis pub/sub (Upstash) - replaces the in-memory EventEmitter this
 // module used before Phase 9. A publish from one serverless invocation now
 // genuinely reaches a subscribe running in a different invocation/instance,
@@ -38,12 +58,16 @@ function getSubscriber(): Redis {
   return globalForRedis.redisSubscriber;
 }
 
-let subscribed = false;
-async function ensureSubscribed(): Promise<Redis> {
+// Generalized over channel name (was single-channel/single-bool before the
+// activity channel existed) - multiple channels share the one subscriber
+// connection ioredis requires, each caller's "message" listener filters to
+// its own channel the same way it always did.
+const subscribedChannels = new Set<string>();
+async function ensureSubscribed(channel: string): Promise<Redis> {
   const subscriber = getSubscriber();
-  if (!subscribed) {
-    await subscriber.subscribe(CHANNEL);
-    subscribed = true;
+  if (!subscribedChannels.has(channel)) {
+    await subscriber.subscribe(channel);
+    subscribedChannels.add(channel);
   }
   return subscriber;
 }
@@ -60,7 +84,7 @@ export async function publishUseCaseUpdate(event: UseCaseUpdateEvent): Promise<v
 export async function subscribeToUseCaseUpdates(
   handler: (event: UseCaseUpdateEvent) => void
 ): Promise<() => void> {
-  const subscriber = await ensureSubscribed();
+  const subscriber = await ensureSubscribed(CHANNEL);
   const listener = (channel: string, message: string) => {
     if (channel !== CHANNEL) return;
     try {
@@ -70,6 +94,31 @@ export async function subscribeToUseCaseUpdates(
       // this should never actually happen (we control both ends), so it's
       // worth knowing about if it ever does.
       logError("eventBus.subscribeToUseCaseUpdates", err);
+    }
+  };
+  subscriber.on("message", listener);
+  return () => subscriber.off("message", listener);
+}
+
+// Fire-and-forget on purpose - a route's real work (a chat turn, a gate
+// action, an agent step) must never fail or slow down because the activity
+// pulse couldn't publish. Errors are logged, never thrown.
+export function publishFlowActivity(flow: ArchitectureFlow): void {
+  getPublisher()
+    .publish(ACTIVITY_CHANNEL, JSON.stringify({ flow } satisfies FlowActivityEvent))
+    .catch((err) => logError("eventBus.publishFlowActivity", err));
+}
+
+export async function subscribeToFlowActivity(
+  handler: (event: FlowActivityEvent) => void
+): Promise<() => void> {
+  const subscriber = await ensureSubscribed(ACTIVITY_CHANNEL);
+  const listener = (channel: string, message: string) => {
+    if (channel !== ACTIVITY_CHANNEL) return;
+    try {
+      handler(JSON.parse(message) as FlowActivityEvent);
+    } catch (err) {
+      logError("eventBus.subscribeToFlowActivity", err);
     }
   };
   subscriber.on("message", listener);

@@ -1,6 +1,7 @@
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { runDiscoveryTurn, type DiscoveryChatMessage } from "@/lib/discoveryAgent";
+import { publishFlowActivity } from "@/lib/eventBus";
 
 export const runtime = "nodejs";
 
@@ -42,6 +43,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (!message) return Response.json({ error: "message is required." }, { status: 400 });
 
   const history = row.messages as unknown as DiscoveryChatMessage[];
+  publishFlowActivity("discovery");
 
   const encoder = new TextEncoder();
   const stream = new ReadableStream({

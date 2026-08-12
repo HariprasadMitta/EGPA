@@ -3,6 +3,7 @@ import { gatewayChatCompletion } from "@/lib/litellm";
 import { clientIp, createRateLimiter } from "@/lib/rateLimit";
 import { prisma } from "@/lib/prisma";
 import { extractJson } from "@/lib/extractJson";
+import { publishFlowActivity } from "@/lib/eventBus";
 import { AutonomyLevel, DataSensitivity, IntegrationSurface, RiskTier } from "@/types";
 
 export const runtime = "nodejs";
@@ -123,6 +124,7 @@ export async function POST(request: Request) {
   if (!body.description || !body.dataSensitivity || !body.autonomyLevel || !body.integrationSurface) {
     return Response.json({ error: "Missing required fields." }, { status: 400 });
   }
+  publishFlowActivity("recommendation");
 
   const riskTier = classifyRisk({
     dataSensitivity: body.dataSensitivity,

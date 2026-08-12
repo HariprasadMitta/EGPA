@@ -1,5 +1,6 @@
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { publishFlowActivity } from "@/lib/eventBus";
 
 export const runtime = "nodejs";
 
@@ -50,6 +51,7 @@ export async function POST(request: Request) {
   if (!body.webhookUrl || !body.webhookUrl.startsWith("https://")) {
     return Response.json({ error: "A real https:// webhook URL is required." }, { status: 400 });
   }
+  publishFlowActivity("admin");
 
   const channel = await prisma.notificationChannel.create({
     data: { kind, webhookUrl: body.webhookUrl, enabled: true },

@@ -6,6 +6,7 @@ import { toGate, toUseCase } from "@/lib/dbMapping";
 import { broadcastBundle } from "@/lib/broadcastBundle";
 import { logAuditEntry } from "@/lib/audit";
 import { sendNotification } from "@/lib/notifications";
+import { publishFlowActivity } from "@/lib/eventBus";
 import { UserRole } from "@/types";
 
 export const runtime = "nodejs";
@@ -32,6 +33,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   } catch {
     return Response.json({ error: "Invalid request body." }, { status: 400 });
   }
+  publishFlowActivity("gate");
 
   if (body.action === "toggle") {
     const already = gate.acknowledgedItems.includes(body.control);

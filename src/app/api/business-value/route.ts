@@ -2,6 +2,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { canSeeAllUseCases } from "@/lib/roles";
 import { computeTimeSaved } from "@/lib/timeSaved";
+import { publishFlowActivity } from "@/lib/eventBus";
 import type { Prisma } from "@prisma/client";
 import { UserRole } from "@/types";
 
@@ -23,6 +24,7 @@ export async function GET() {
   if (!me?.role || !canSeeAllUseCases(me.role as UserRole)) {
     return Response.json({ error: "Only governance-owner, ARB, or admin can see business value." }, { status: 403 });
   }
+  publishFlowActivity("governance");
 
   const useCaseWhere: Prisma.UseCaseWhereInput = {};
   if (me.organizationId) {

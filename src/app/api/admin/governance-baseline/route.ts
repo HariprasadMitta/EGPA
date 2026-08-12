@@ -1,5 +1,6 @@
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { publishFlowActivity } from "@/lib/eventBus";
 import { RiskTier } from "@/types";
 
 export const runtime = "nodejs";
@@ -57,6 +58,7 @@ export async function PATCH(request: Request) {
   if (body.costPerHourUsd != null && (typeof body.costPerHourUsd !== "number" || body.costPerHourUsd < 0)) {
     return Response.json({ error: "costPerHourUsd must be a non-negative number." }, { status: 400 });
   }
+  publishFlowActivity("admin");
 
   const row = await prisma.governanceBaseline.upsert({
     where: { riskTier },

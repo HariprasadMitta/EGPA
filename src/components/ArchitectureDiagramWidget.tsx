@@ -3,19 +3,11 @@
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { canAccessDeveloperTools } from "@/lib/roles";
+import type { ArchitectureFlow } from "@/lib/eventBus";
 
-type FlowId =
-  | "all"
-  | "discovery"
-  | "recommendation"
-  | "gate"
-  | "execute"
-  | "governance"
-  | "admin"
-  | "help"
-  | "evidence";
+type FlowId = "all" | ArchitectureFlow;
 
-const FLOW_LABELS: Record<Exclude<FlowId, "all">, string> = {
+const FLOW_LABELS: Record<ArchitectureFlow, string> = {
   discovery: "Discovery chat turn",
   recommendation: "Recommendation",
   gate: "Gate action",
@@ -25,7 +17,7 @@ const FLOW_LABELS: Record<Exclude<FlowId, "all">, string> = {
   help: "Help chat ask",
   evidence: "Evidence export",
 };
-const CYCLE_ORDER = Object.keys(FLOW_LABELS) as Exclude<FlowId, "all">[];
+const ALL_FLOWS = Object.keys(FLOW_LABELS) as ArchitectureFlow[];
 
 const GAPS: { n: number; text: string; where: string; effort: "Small" | "Medium" | "Large" }[] = [
   { n: 1, text: "Discovery never asks what governance/ITSM/architecture tooling already exists", where: "discoveryAgent.ts — system prompt", effort: "Small" },
@@ -105,33 +97,52 @@ function Marker({ cx, cy, n, filled }: { cx: number; cy: number; n: number; fill
 
 // Real, signed-in Developer/Admin-only floating widget - shows EGPA's own
 // architecture with the 9 audited backlog gaps drawn onto the exact node or
-// edge each one touches, and interactively highlights (with real motion) the
-// real request path for whichever flow is selected or auto-cycling.
-// Internal/dev-facing (file paths, route names, unbuilt features named
-// outright), so gated the same as Agentic System / Model Builder rather than
-// shown to every signed-in role.
+// edge each one touches, and lights up (with real motion) whichever flow
+// just had a genuine request - anyone's, anywhere in the org, via the real
+// SSE feed at /api/architecture-activity/events (see publishFlowActivity
+// call sites). Not a scripted demo loop. Internal/dev-facing (file paths,
+// route names, unbuilt features named outright), so gated the same as
+// Agentic System / Model Builder rather than shown to every signed-in role.
 export function ArchitectureDiagramWidget() {
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const [activeFlow, setActiveFlow] = useState<FlowId>("all");
-  const [auto, setAuto] = useState(true);
-  const cycleIndexRef = useRef(-1);
+  const [live, setLive] = useState(true);
+  const [connected, setConnected] = useState(false);
+  const fadeTimer = useRef<number | null>(null);
 
+  // Real, org-wide traffic - every genuine request any signed-in user makes
+  // (anywhere, not just this tab) publishes a pulse via publishFlowActivity
+  // at the real point in each route where that work happens (see the call
+  // sites: discovery-sessions/messages, recommend, gate, execute-step,
+  // business-value, help-chat, evidence-export, a handful of /admin/*
+  // routes). This is a live traffic view, not a scripted demo.
   useEffect(() => {
-    if (!open || !auto) return;
-    function tick() {
-      cycleIndexRef.current = (cycleIndexRef.current + 1) % CYCLE_ORDER.length;
-      setActiveFlow(CYCLE_ORDER[cycleIndexRef.current]);
-    }
-    tick();
-    const id = window.setInterval(tick, 2900);
-    return () => window.clearInterval(id);
-  }, [open, auto]);
+    if (!open || !live) return;
+    const source = new EventSource("/api/architecture-activity/events");
+    source.onopen = () => setConnected(true);
+    source.onerror = () => setConnected(false);
+    source.onmessage = (event) => {
+      try {
+        const { flow } = JSON.parse(event.data) as { flow: ArchitectureFlow };
+        setActiveFlow(flow);
+        if (fadeTimer.current) window.clearTimeout(fadeTimer.current);
+        fadeTimer.current = window.setTimeout(() => setActiveFlow("all"), 4000);
+      } catch {
+        // Skip a malformed event rather than crash the subscription.
+      }
+    };
+    return () => {
+      source.close();
+      setConnected(false);
+      if (fadeTimer.current) window.clearTimeout(fadeTimer.current);
+    };
+  }, [open, live]);
 
   if (!user || !canAccessDeveloperTools(user.role)) return null;
 
   function pick(flow: FlowId) {
-    setAuto(false);
+    setLive(false);
     setActiveFlow(flow);
   }
 
@@ -169,7 +180,7 @@ export function ArchitectureDiagramWidget() {
                 >
                   All
                 </button>
-                {CYCLE_ORDER.map((f) => (
+                {ALL_FLOWS.map((f) => (
                   <button
                     key={f}
                     type="button"
@@ -184,14 +195,18 @@ export function ArchitectureDiagramWidget() {
               </div>
 
               <p className="mt-3 flex items-center gap-2 text-xs text-[var(--muted)]">
-                <span className="arch-dotpulse h-1.5 w-1.5 flex-none rounded-full bg-[var(--tier-medium)]" data-live={auto ? "1" : "0"} />
-                {auto
-                  ? `Live: ${activeFlow === "all" ? "cycling" : FLOW_LABELS[activeFlow as Exclude<FlowId, "all">]}`
+                <span className="arch-dotpulse h-1.5 w-1.5 flex-none rounded-full bg-[var(--tier-medium)]" data-live={live ? "1" : "0"} />
+                {live
+                  ? connected
+                    ? activeFlow === "all"
+                      ? "Live — watching real org-wide traffic…"
+                      : `Live: ${FLOW_LABELS[activeFlow as ArchitectureFlow]} just happened`
+                    : "Connecting to live traffic…"
                   : activeFlow === "all"
                     ? "Showing everything, unfiltered."
-                    : `Pinned: ${FLOW_LABELS[activeFlow as Exclude<FlowId, "all">]}`}
-                <button type="button" onClick={() => setAuto((a) => !a)} className="font-semibold text-[var(--series-1)] underline underline-offset-2">
-                  {auto ? "Pause" : "Resume auto-cycle"}
+                    : `Pinned: ${FLOW_LABELS[activeFlow as ArchitectureFlow]}`}
+                <button type="button" onClick={() => setLive((l) => !l)} className="font-semibold text-[var(--series-1)] underline underline-offset-2">
+                  {live ? "Pause" : "Resume live"}
                 </button>
               </p>
 

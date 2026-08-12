@@ -2,6 +2,7 @@ import { auth } from "@/auth";
 import { gatewayChatThread, type ChatMessage } from "@/lib/litellm";
 import { PLATFORM_GUIDE_CONTEXT } from "@/lib/guideContent";
 import { clientIp, createRateLimiter } from "@/lib/rateLimit";
+import { publishFlowActivity } from "@/lib/eventBus";
 
 export const runtime = "nodejs";
 
@@ -38,6 +39,7 @@ export async function POST(request: Request) {
   const message = body.message?.trim();
   if (!message) return Response.json({ error: "message is required." }, { status: 400 });
   const history = Array.isArray(body.history) ? body.history.slice(-MAX_HISTORY_MESSAGES) : [];
+  publishFlowActivity("help");
 
   try {
     const result = await gatewayChatThread(
