@@ -148,3 +148,59 @@ body {
   overflow: hidden;
   min-height: 0;
 }
+
+/* Architecture diagram widget (ArchitectureDiagramWidget.tsx) - flow
+   highlighting. Dimmed by default once a flow is picked; matching elements
+   get full opacity plus motion, so a request's real path visibly "lights up"
+   against a dimmed backdrop. */
+[data-flow] {
+  transition: opacity 0.35s ease;
+}
+.arch-diagram.filtered [data-flow] {
+  opacity: 0.14;
+}
+.arch-diagram.filtered [data-flow].arch-hit {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .arch-diagram.filtered path.arch-hit,
+  .arch-diagram.filtered g.arch-hit path {
+    stroke-dasharray: 7 5;
+    animation: arch-flowmove 0.7s linear infinite;
+  }
+  @keyframes arch-flowmove {
+    to {
+      stroke-dashoffset: -24;
+    }
+  }
+
+  .arch-diagram.filtered rect.arch-hit,
+  .arch-diagram.filtered g.arch-hit > rect {
+    animation: arch-pulseglow 1.7s ease-in-out infinite;
+  }
+  @keyframes arch-pulseglow {
+    0%,
+    100% {
+      filter: none;
+    }
+    50% {
+      filter: drop-shadow(0 0 7px var(--tier-medium));
+    }
+  }
+
+  .arch-dotpulse[data-live="1"] {
+    animation: arch-dotbeat 1.1s ease-in-out infinite;
+  }
+  @keyframes arch-dotbeat {
+    0%,
+    100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 0.35;
+      transform: scale(0.7);
+    }
+  }
+}

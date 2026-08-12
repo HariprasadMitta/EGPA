@@ -7,6 +7,7 @@ import { AuthProvider } from "@/lib/auth";
 import { MlOpsProvider } from "@/lib/mlops";
 import { NavBar } from "@/components/NavBar";
 import { HelpChatWidget } from "@/components/HelpChatWidget";
+import { ArchitectureDiagramWidget } from "@/components/ArchitectureDiagramWidget";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -42,6 +43,7 @@ export default async function RootLayout({
               <NavBar />
               <main className="flex-1">{children}</main>
               <HelpChatWidget />
+              <ArchitectureDiagramWidget />
             </MlOpsProvider>
           </StoreProvider>
         </AuthProvider>
