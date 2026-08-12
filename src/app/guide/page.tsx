@@ -206,6 +206,13 @@ const BEYOND_PIPELINE: BeyondPageGuide[] = [
     description:
       "Connect your own free-tier OpenRouter or Hugging Face account (real OAuth, no key ever pasted in), Ping either one to check it's actually reachable, and try a small real RAG demo - paste text, it's really embedded and chunked, then ask a question and get real cosine-similarity retrieval back.",
   },
+  {
+    title: "Why EGPA",
+    href: "/architecture-rationale",
+    access: "All roles",
+    description:
+      "EGPA's own architecture decision record - the problem discovery, the alternative enterprise approaches actually considered, the options/trade-offs and build-vs-buy reasoning, the current-to-target transition, and the real phased build history, held to the same standard every use case inside EGPA is.",
+  },
 ];
 
 interface ConceptGuide {
