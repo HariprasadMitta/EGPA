@@ -26,7 +26,7 @@ export async function GET() {
 
   const since = monthStart();
 
-  const [criticalGates, allGates, piiCount, anomalyCount, budgets] = await Promise.all([
+  const [criticalGates, allGates, piiCount, anomalyCount, budgets, discoveryOutcomes] = await Promise.all([
     prisma.governanceGate.findMany({ where: { riskTier: "Critical" }, select: { arbApproved: true } }),
     prisma.governanceGate.findMany({
       select: { useCaseId: true, riskTier: true, acknowledgedAt: true },
@@ -38,6 +38,15 @@ export async function GET() {
       where: { action: { in: ["drift_detected", "anomaly_detected"] }, createdAt: { gte: since } },
     }),
     prisma.budget.findMany(),
+    // Real evidence the Discovery gate is doing its job org-wide, not just
+    // per-session - how many concluded sessions actually talked someone out
+    // of building (process-only/extend-existing/research-first) versus
+    // confirming a real build was warranted. Only counts sessions that
+    // reached a real conclusion (recommendedPath set), not abandoned chats.
+    prisma.problemDiscoverySession.findMany({
+      where: { recommendedPath: { not: null } },
+      select: { recommendedPath: true },
+    }),
   ]);
 
   const criticalTotal = criticalGates.length;
@@ -73,6 +82,9 @@ export async function GET() {
     if (percentUsed >= budget.alertThresholdPct) budgetAlerts += 1;
   }
 
+  const discoveryConcluded = discoveryOutcomes.length;
+  const discoveryBuildAvoided = discoveryOutcomes.filter((d) => d.recommendedPath !== "build").length;
+
   return Response.json({
     criticalArbApproval: { total: criticalTotal, approved: criticalApproved },
     recertificationOverdue,
@@ -80,5 +92,7 @@ export async function GET() {
     anomaliesThisMonth: anomalyCount,
     budgetAlertsActive: budgetAlerts,
     totalUseCasesTracked: allGates.length,
+    discoverySessionsConcluded: discoveryConcluded,
+    discoveryBuildAvoided,
   });
 }

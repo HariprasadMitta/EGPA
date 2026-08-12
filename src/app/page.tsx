@@ -22,17 +22,20 @@ export default function LandingPage() {
         <div className="mx-auto grid max-w-6xl gap-10 px-6 py-16 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
           <div>
             <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-[#7fe0d8]">
-              Enterprise AI Governance &amp; Framework Advisor
+              Enterprise AI Governance Platform
             </p>
             <h1 className="text-4xl font-bold leading-tight text-white sm:text-5xl">
-              Submit a use case. Get a governed, explainable AI architecture
-              recommendation in minutes.
+              Discovery to Observability. Problem statement &rarr; use case
+              &rarr; governed, running agent.
             </h1>
             <p className="mt-5 text-lg text-white/80">
-              Enforced, not optional. EGPA computes a risk tier from your use
-              case, recommends a concrete agent framework and tool stack, and
-              blocks progress until the required governance controls for that
-              tier are satisfied &mdash; with a full decision record every time.
+              A live discovery chat turns a vague idea into a real problem
+              statement. Intake and a computed risk tier turn that into a use
+              case with governance requirements attached. A gate that blocks
+              on unmet controls, written reasoning on every sign-off, and real
+              LLM-backed execution turn it into a governed, running agent
+              &mdash; with cost and time saved tracked against a declared
+              baseline the whole way.
             </p>
             <div className="mt-8 flex flex-wrap items-center gap-4">
               <Link

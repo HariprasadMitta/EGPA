@@ -14,6 +14,8 @@ interface PostureData {
   anomaliesThisMonth: number;
   budgetAlertsActive: number;
   totalUseCasesTracked: number;
+  discoverySessionsConcluded: number;
+  discoveryBuildAvoided: number;
 }
 
 interface GivenDelegation {
@@ -397,6 +399,16 @@ export default function GovernancePosturePage() {
             value={String(data.totalUseCasesTracked)}
             tone="neutral"
             detail="Total use cases with a governance gate record in the portfolio."
+          />
+          <StatCard
+            label="Discovery avoided a build"
+            value={
+              data.discoverySessionsConcluded === 0
+                ? "No sessions yet"
+                : `${Math.round((data.discoveryBuildAvoided / data.discoverySessionsConcluded) * 100)}%`
+            }
+            tone="neutral"
+            detail={`Of ${data.discoverySessionsConcluded} concluded Discovery session(s), ${data.discoveryBuildAvoided} recommended process-only, extend-existing, or research-first over building a new agent - the discovery gate's real evidence it's not a rubber stamp on the way to Intake.`}
           />
         </div>
       )}
