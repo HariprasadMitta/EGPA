@@ -447,8 +447,7 @@ export function ArchitectureDiagramWidget() {
                   )}
                   {visible("admin") && (
                     <g data-flow="admin" className={activeClass}>
-                      <text x="750" y="176" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="10" fontWeight="700" fill={ACCENT}>+ KnowledgeBaseDocument</text>
-                      <text x="750" y="190" textAnchor="middle" fontSize="9" fill={ACCENT}>(proposed)</text>
+                      <text x="750" y="176" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="10" fontWeight="700" fill={DATA}>+ KnowledgeBaseDocument</text>
                     </g>
                   )}
                   {visible("discovery") && (
@@ -546,12 +545,12 @@ export function ArchitectureDiagramWidget() {
                       )}
                       {row.flow === "admin" && (
                         <>
-                          <rect x="330" y="536" width="210" height="40" rx="8" fill="none" stroke={ACCENT} strokeWidth={1.6} strokeDasharray="5 4" />
-                          <text x="435" y="553" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="10" fontWeight="700" fill={ACCENT}>/admin/knowledge-base</text>
-                          <text x="435" y="567" textAnchor="middle" fontSize="9" fill={ACCENT}>(proposed)</text>
-                          <path d="M435,526 L435,536" stroke={ACCENT} strokeWidth={1.6} strokeDasharray="4 3" fill="none" markerEnd="url(#waAccent)" />
-                          <path d="M540,556 C 600,556 610,562 650,566" stroke={ACCENT} strokeWidth={1.6} strokeDasharray="4 3" fill="none" markerEnd="url(#waAccent)" />
-                          <text x="558" y="549" fontSize="9" fill={ACCENT}>embed (Cohere) &#8594; upsert vectors</text>
+                          <rect x="330" y="536" width="210" height="40" rx="8" fill={SERVER} fillOpacity={0.08} stroke={SERVER} strokeWidth={1.4} />
+                          <text x="435" y="553" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="10" fontWeight="700" fill={SERVER}>/admin/knowledge-base</text>
+                          <text x="435" y="567" textAnchor="middle" fontSize="9" fill="var(--muted)">upload docx/pdf/text</text>
+                          <path d="M435,526 L435,536" stroke={SERVER} strokeWidth={1.2} fill="none" markerEnd="url(#wa)" opacity={0.85} />
+                          <path d="M540,556 C 600,556 610,562 650,566" stroke={DATA} strokeWidth={1.2} fill="none" markerEnd="url(#wa)" opacity={0.9} />
+                          <text x="558" y="549" fontSize="9" fill="var(--muted)">embed (Cohere) &#8594; upsert vectors</text>
                         </>
                       )}
                       {row.flow === "help" && (

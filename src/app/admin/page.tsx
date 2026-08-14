@@ -39,6 +39,109 @@ interface NotificationChannelRow {
   createdAt: string;
 }
 
+interface KnowledgeBaseDocumentRow {
+  id: string;
+  filename: string;
+  sourceType: "pdf" | "docx" | "text";
+  sizeBytes: number;
+  chunkCount: number;
+  uploadedByName: string;
+  createdAt: string;
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+// Real admin path onto the same Pinecone index knowledge_base_search reads
+// from (src/lib/knowledgeBase.ts) - upload embeds and upserts real vectors
+// via Cohere/Pinecone before this list ever shows the document, same
+// pipeline scripts/ingest-knowledge-base.ts uses by hand.
+function KnowledgeBaseSection() {
+  const [documents, setDocuments] = useState<KnowledgeBaseDocumentRow[]>([]);
+  const [file, setFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  function load() {
+    fetch("/api/admin/knowledge-base")
+      .then((r) => r.json())
+      .then((d) => setDocuments(d.documents ?? []));
+  }
+  useEffect(load, []);
+
+  async function upload() {
+    if (!file) return;
+    setUploading(true);
+    setMessage(null);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/admin/knowledge-base", { method: "POST", body: formData });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setMessage(`Embedded and indexed ${data.document.chunkCount} real chunk${data.document.chunkCount === 1 ? "" : "s"} from "${data.document.filename}".`);
+      setFile(null);
+      load();
+    } catch (err) {
+      setMessage((err as Error).message);
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function remove(id: string) {
+    await fetch(`/api/admin/knowledge-base?id=${id}`, { method: "DELETE" });
+    load();
+  }
+
+  return (
+    <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6">
+      <h2 className="text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">
+        Knowledge base &mdash; real governance documents
+      </h2>
+      <p className="mt-1 text-xs text-[var(--muted)]">
+        Upload a .pdf, .docx, .txt, or .md file to embed it via Cohere and add it to the same Pinecone index
+        knowledge_base_search reads from during every Agentic System run - real chunks, not a placeholder.
+      </p>
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <input
+          type="file"
+          accept=".pdf,.docx,.txt,.md"
+          onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+          className="flex-1 rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm"
+        />
+        <button onClick={upload} disabled={uploading || !file} className="rounded-full bg-[var(--brand)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
+          {uploading ? "Embedding..." : "Upload & embed"}
+        </button>
+      </div>
+      {message && <p className="mt-2 text-xs text-[var(--muted)]">{message}</p>}
+
+      <div className="mt-4 space-y-2">
+        {documents.length === 0 ? (
+          <p className="text-sm text-[var(--muted)]">No documents uploaded yet.</p>
+        ) : (
+          documents.map((doc) => (
+            <div key={doc.id} className="flex items-center justify-between gap-2 rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm">
+              <span className="text-xs">
+                <span className="font-semibold">{doc.filename}</span>{" "}
+                <span className="text-[var(--muted)]">
+                  &middot; {doc.chunkCount} chunk{doc.chunkCount === 1 ? "" : "s"} &middot; {formatFileSize(doc.sizeBytes)} &middot; {doc.uploadedByName}
+                </span>
+              </span>
+              <button onClick={() => remove(doc.id)} className="text-xs text-[var(--muted)] hover:underline">
+                Remove
+              </button>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
 const CHANNEL_KIND_LABELS: Record<NotificationChannelRow["kind"], string> = {
   slack: "Slack",
   teams: "Microsoft Teams",
@@ -692,6 +795,7 @@ export default function AdminPage() {
           View overview dashboard &rarr;
         </Link>
       </div>
+      <KnowledgeBaseSection />
       <NotificationSection />
       <UserConsumptionSection />
       <GovernanceBaselineSection />

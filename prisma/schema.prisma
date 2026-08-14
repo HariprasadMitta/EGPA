@@ -468,6 +468,22 @@ model McpServerEntry {
   updatedAt        DateTime @updatedAt
 }
 
+// Real admin-uploaded governance documents in the Pinecone knowledge base -
+// the hand-run scripts/ingest-knowledge-base.ts script used to be the only
+// way to add anything. chunkCount records how many vectors this document
+// contributed, so a delete can reconstruct their deterministic IDs
+// (`${id}-chunk-${i}`) without a separate per-chunk table.
+model KnowledgeBaseDocument {
+  id               String   @id @default(cuid())
+  filename         String
+  sourceType       String // "pdf" | "docx" | "text"
+  sizeBytes        Int
+  chunkCount       Int
+  uploadedByUserId String
+  uploadedByName   String
+  createdAt        DateTime @default(now())
+}
+
 // Real per-use-case discussion thread - governance review in practice
 // involves back-and-forth (ARB asking a clarifying question, a governance
 // owner leaving a note), which had no home anywhere in the app before.
