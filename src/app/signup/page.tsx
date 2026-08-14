@@ -82,7 +82,7 @@ export default function SignupPage() {
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
-          placeholder="e.g. Priya Nandakumar"
+          placeholder="e.g. Hariprasad Mitta"
           className="mt-1 w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm"
         />
 
