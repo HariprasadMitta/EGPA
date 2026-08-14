@@ -137,7 +137,27 @@ export default function LandingPage() {
       </section>
 
       <div className="mx-auto max-w-6xl px-6 py-14">
-        <section id="pipeline" className="scroll-mt-20">
+        <section id="overview-video" className="scroll-mt-20">
+          <h2 className="text-2xl font-bold text-[var(--brand-strong)]">
+            Watch a 90-second overview
+          </h2>
+          <p className="mt-2 max-w-2xl text-[var(--muted)]">
+            Real screens, real data &mdash; discovery through observability, captured straight from
+            this app.
+          </p>
+          <div className="mt-6 overflow-hidden rounded-xl border border-[var(--border)] shadow-lg">
+            <video
+              controls
+              preload="metadata"
+              poster="/video/egpa-overview-poster.jpg"
+              className="w-full bg-black"
+            >
+              <source src="/video/egpa-overview.mp4" type="video/mp4" />
+            </video>
+          </div>
+        </section>
+
+        <section id="pipeline" className="mt-20 scroll-mt-20">
           <h2 className="text-2xl font-bold text-[var(--brand-strong)]">
             The pipeline, step by step
           </h2>
