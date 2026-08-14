@@ -64,13 +64,89 @@ function pathToFlow(pathname: string): FlowId {
   return "all";
 }
 
-function MapIcon() {
+// Three connected nodes read as "system diagram" at a glance - a folded
+// paper map (the old icon here) doesn't say "architecture" to most people,
+// hence pairing it with a visible text label on the trigger button too.
+function ArchitectureIcon() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-6 w-6">
-      <path d="M9 4 3 6.5v14L9 18l6 2.5L21 18V4l-6 2.5L9 4Z" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M9 4v14M15 6.5v14" strokeLinecap="round" strokeLinejoin="round" />
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-5 w-5">
+      <circle cx="5" cy="6" r="2.5" />
+      <circle cx="5" cy="18" r="2.5" />
+      <circle cx="18" cy="12" r="2.5" />
+      <path d="M7.3 7 15.8 11M7.3 17 15.8 13" strokeLinecap="round" />
     </svg>
   );
+}
+
+// Small per-flow glyphs for the filter pills, so each one is recognizable
+// at a glance instead of relying on reading the full label text.
+function FlowIcon({ flow }: { flow: FlowId }) {
+  const common = { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 2, className: "h-3.5 w-3.5" } as const;
+  switch (flow) {
+    case "all":
+      return (
+        <svg {...common}>
+          <rect x="3.5" y="3.5" width="7" height="7" rx="1.3" />
+          <rect x="13.5" y="3.5" width="7" height="7" rx="1.3" />
+          <rect x="3.5" y="13.5" width="7" height="7" rx="1.3" />
+          <rect x="13.5" y="13.5" width="7" height="7" rx="1.3" />
+        </svg>
+      );
+    case "discovery":
+      return (
+        <svg {...common}>
+          <path d="M21 11.2a7.8 7.8 0 0 1-7.8 7.8 7.7 7.7 0 0 1-3.5-.8L4 20l1.6-5.3a7.7 7.7 0 0 1-.8-3.5A7.8 7.8 0 0 1 12.6 3.4h.4a8 8 0 0 1 8 7.8Z" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      );
+    case "recommendation":
+      return (
+        <svg {...common}>
+          <path d="M9 18h6M10 21h4M8 11a4 4 0 1 1 8 0c0 1.8-1 2.6-1.8 3.4-.5.5-.7 1-.7 1.6H10.5c0-.6-.2-1.1-.7-1.6C9 13.6 8 12.8 8 11Z" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      );
+    case "gate":
+      return (
+        <svg {...common}>
+          <path d="M12 3.5 19 6v5.5c0 4.6-3 7.9-7 9-4-1.1-7-4.4-7-9V6l7-2.5Z" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="m9 12 2.2 2.2L15.5 10" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      );
+    case "execute":
+      return (
+        <svg {...common}>
+          <path d="M13 3 5 13.5h5.5L11 21l8-10.5h-5.5L13 3Z" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      );
+    case "governance":
+      return (
+        <svg {...common}>
+          <path d="M12 3v18M6 7h12M6 7 3.5 12 6 13.5 8.5 12 6 7ZM18 7l-2.5 5 2.5 1.5 2.5-1.5L18 7Z" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M9 21h6" strokeLinecap="round" />
+        </svg>
+      );
+    case "admin":
+      return (
+        <svg {...common}>
+          <circle cx="12" cy="12" r="2.8" />
+          <path d="M12 3.5v2.3M12 18.2v2.3M20.5 12h-2.3M5.8 12H3.5M17.9 6.1l-1.6 1.6M7.7 16.3l-1.6 1.6M17.9 17.9l-1.6-1.6M7.7 7.7 6.1 6.1" strokeLinecap="round" />
+        </svg>
+      );
+    case "help":
+      return (
+        <svg {...common}>
+          <circle cx="12" cy="12" r="8.5" />
+          <path d="M9.7 9.3a2.3 2.3 0 1 1 3.3 2.1c-.8.4-1 .8-1 1.6v.3" strokeLinecap="round" strokeLinejoin="round" />
+          <circle cx="12" cy="16.7" r="0.9" fill="currentColor" stroke="none" />
+        </svg>
+      );
+    case "evidence":
+      return (
+        <svg {...common}>
+          <path d="M12 3v11.5M8 11l4 4 4-4" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M4.5 16.5v2A2.5 2.5 0 0 0 7 21h10a2.5 2.5 0 0 0 2.5-2.5v-2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      );
+  }
 }
 
 function CloseIcon() {
@@ -259,10 +335,11 @@ export function ArchitectureDiagramWidget() {
     <>
       <button
         onClick={() => setOpen((o) => !o)}
-        className="fixed bottom-24 left-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-[var(--brand)] text-white shadow-lg transition-transform hover:scale-105"
+        className="fixed bottom-24 left-5 z-40 flex h-11 items-center gap-2 rounded-full bg-[var(--brand)] pl-3.5 pr-4 text-white shadow-lg transition-transform hover:scale-105"
         aria-label={open ? "Close architecture diagram" : "Open architecture diagram"}
       >
-        {open ? <CloseIcon /> : <MapIcon />}
+        {open ? <CloseIcon /> : <ArchitectureIcon />}
+        <span className="text-xs font-semibold">Architecture</span>
       </button>
 
       {/* Docked panel, not a full-screen modal - no backdrop capturing
@@ -298,10 +375,11 @@ export function ArchitectureDiagramWidget() {
                 <button
                   type="button"
                   onClick={() => pick("all")}
-                  className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors ${
+                  className={`flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors ${
                     activeFlow === "all" ? "border-transparent bg-[var(--tier-medium)] text-white" : "border-[var(--border)] bg-[var(--background)] text-[var(--foreground)] hover:border-[var(--series-1)]"
                   }`}
                 >
+                  <FlowIcon flow="all" />
                   All
                 </button>
                 {ALL_FLOWS.map((f) => (
@@ -309,10 +387,11 @@ export function ArchitectureDiagramWidget() {
                     key={f}
                     type="button"
                     onClick={() => pick(f)}
-                    className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors ${
+                    className={`flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors ${
                       activeFlow === f ? "border-transparent bg-[var(--tier-medium)] text-white" : "border-[var(--border)] bg-[var(--background)] text-[var(--foreground)] hover:border-[var(--series-1)]"
                     }`}
                   >
+                    <FlowIcon flow={f} />
                     {FLOW_LABELS[f]}
                   </button>
                 ))}
