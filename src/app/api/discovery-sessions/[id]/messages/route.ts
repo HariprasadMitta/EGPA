@@ -57,7 +57,15 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           // org-wide Architecture widget can show each real action live -
           // thinking, calling search_existing_use_cases, the result coming
           // back, done - the same phases this page's own SSE stream carries.
-          publishFlowActivity("discovery", event.type);
+          // `detail` carries the real tool name / error text, not just the
+          // generic phase, so the widget can show what actually happened.
+          const detail =
+            event.type === "tool_call" || event.type === "tool_result"
+              ? event.toolName
+              : event.type === "error"
+                ? event.error
+                : undefined;
+          publishFlowActivity("discovery", event.type, detail);
           if (event.type === "done") {
             const updated = await prisma.problemDiscoverySession.update({
               where: { id },

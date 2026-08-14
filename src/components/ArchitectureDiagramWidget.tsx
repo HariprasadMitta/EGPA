@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 import { canAccessDeveloperTools } from "@/lib/roles";
 import type { ArchitectureFlow } from "@/lib/eventBus";
@@ -35,23 +36,19 @@ const PHASE_LABELS: Record<string, string> = {
   usage_delta: "token usage updated",
 };
 
-const GAPS: { n: number; text: string; where: string; effort: "Small" | "Medium" | "Large" }[] = [
-  { n: 1, text: "Discovery never asks what governance/ITSM/architecture tooling already exists", where: "discoveryAgent.ts — system prompt", effort: "Small" },
-  { n: 2, text: "Discovery's SSE stream is missing node and usage_delta events Execution already has", where: "discoveryAgent.ts — turn runner", effort: "Large" },
-  { n: 3, text: "No live/authoritative cost labeling, no raw event log, no real RAG preview panel, no allowlist badge", where: "execution/page.tsx, AgentLoopVisualizer.tsx", effort: "Medium" },
-  { n: 4, text: "No “reversibility” field on a recommendation, separate from the alternatives-considered prose", where: "recommend/route.ts → Postgres", effort: "Medium" },
-  { n: 5, text: "Reject reason is one free-text field, not category + reasoning + suggested alternative", where: "gate/route.ts → Postgres", effort: "Medium" },
-  { n: 6, text: "Evidence export has no Discovery Summary section at all", where: "evidence-export/route.ts", effort: "Medium" },
-  { n: 7, text: "“Improved reuse” is Model Registry adoption only — never reads real search_existing_use_cases match data", where: "business-value/route.ts (root cause upstream)", effort: "Medium" },
-  { n: 8, text: "Help Assistant has no real RAG — static string in the system prompt, no retrieval, no separate namespace", where: "help-chat/route.ts → new docs index", effort: "Large" },
-  { n: 9, text: "No admin path to add governance docs (docx/pdf/text) to the knowledge base — today it's a hand-run script", where: "new /admin/knowledge-base route", effort: "Large" },
-];
-
-const EFFORT_STYLE: Record<string, string> = {
-  Small: "bg-[var(--tier-medium-bg)] text-[var(--tier-medium)] opacity-70",
-  Medium: "bg-[var(--tier-medium-bg)] text-[var(--tier-medium)]",
-  Large: "bg-[var(--tier-medium)] text-white",
-};
+// Which real flow a given URL path belongs to, so the widget can default to
+// "this page's own architecture" the moment it opens - no click required.
+// Unmapped pages (portfolio, dashboard, inbox, adr, ...) fall back to "all"
+// since they don't correspond to one single flow.
+function pathToFlow(pathname: string): FlowId {
+  if (pathname.startsWith("/discovery")) return "discovery";
+  if (pathname.startsWith("/recommendation")) return "recommendation";
+  if (pathname.startsWith("/gate")) return "gate";
+  if (pathname.startsWith("/execution")) return "execute";
+  if (pathname.startsWith("/governance")) return "governance";
+  if (pathname.startsWith("/admin")) return "admin";
+  return "all";
+}
 
 function MapIcon() {
   return (
@@ -76,7 +73,7 @@ const DATA = "var(--series-7)";
 const ACCENT = "var(--tier-medium)";
 
 // Row-by-row Client -> Server boxes, each tagged with the real flow it
-// belongs to and (for a few) the numbered gap marker that sits on it.
+// belongs to.
 const ROWS: {
   flow: Exclude<FlowId, "all">;
   y: number;
@@ -87,46 +84,56 @@ const ROWS: {
   serverSub: string;
   serverLines?: string[];
   arrowLabel: string;
-  marker?: number;
-  markerOnClient?: boolean;
-  markerFilled?: boolean;
 }[] = [
-  { flow: "discovery", y: 50, clientLabel: "Discovery page", serverLabel: "/discovery-sessions", serverSub: "discoveryAgent.ts", arrowLabel: "chat turn (SSE)", marker: 1 },
-  { flow: "recommendation", y: 134, clientLabel: "Recommendation page", serverLabel: ".../recommendation", serverSub: "recommend/route.ts", arrowLabel: "get recommendation", marker: 4 },
-  { flow: "gate", y: 218, clientLabel: "Gate page", serverLabel: ".../gate", serverSub: "gate/route.ts", arrowLabel: "acknowledge / approve / reject", marker: 5 },
-  { flow: "execute", y: 302, clientLabel: "Agentic System page", clientSub: "AgentLoopVisualizer", serverLabel: "/execute-step", serverSub: "agentStep.ts", arrowLabel: "run step (SSE)", marker: 3, markerOnClient: true },
-  { flow: "governance", y: 386, clientLabel: "Governance page", serverLabel: "governance-posture", serverSub: "business-value/route.ts", serverLines: ["governance-posture", "business-value"], arrowLabel: "fetch posture", marker: 7 },
+  { flow: "discovery", y: 50, clientLabel: "Discovery page", serverLabel: "/discovery-sessions", serverSub: "discoveryAgent.ts", arrowLabel: "chat turn (SSE)" },
+  { flow: "recommendation", y: 134, clientLabel: "Recommendation page", serverLabel: ".../recommendation", serverSub: "recommend/route.ts", arrowLabel: "get recommendation" },
+  { flow: "gate", y: 218, clientLabel: "Gate page", serverLabel: ".../gate", serverSub: "gate/route.ts", arrowLabel: "acknowledge / approve / reject" },
+  { flow: "execute", y: 302, clientLabel: "Agentic System page", clientSub: "AgentLoopVisualizer", serverLabel: "/execute-step", serverSub: "agentStep.ts", arrowLabel: "run step (SSE)" },
+  { flow: "governance", y: 386, clientLabel: "Governance page", serverLabel: "governance-posture", serverSub: "business-value/route.ts", serverLines: ["governance-posture", "business-value"], arrowLabel: "fetch posture" },
   { flow: "admin", y: 470, clientLabel: "Admin page", serverLabel: "/admin/*", serverSub: "config, baselines", arrowLabel: "configure" },
-  { flow: "help", y: 600, clientLabel: "Help Chat widget", clientSub: "overlay, every page", clientDashed: true, serverLabel: "/help-chat", serverSub: "guideContent.ts (static)", arrowLabel: "ask", marker: 8, markerFilled: true },
+  { flow: "help", y: 600, clientLabel: "Help Chat widget", clientSub: "overlay, every page", clientDashed: true, serverLabel: "/help-chat", serverSub: "guideContent.ts (static)", arrowLabel: "ask" },
 ];
 
-function Marker({ cx, cy, n, filled }: { cx: number; cy: number; n: number; filled?: boolean }) {
-  return (
-    <>
-      <circle cx={cx} cy={cy} r={9} fill={filled ? ACCENT : "var(--tier-medium-bg)"} stroke={ACCENT} strokeWidth={filled ? 0 : 1.4} strokeDasharray={filled ? undefined : "2.5 2"} />
-      <text x={cx} y={cy + 3.5} textAnchor="middle" fontSize={9.5} fontWeight={700} fill={filled ? "#fff" : ACCENT}>
-        {n}
-      </text>
-    </>
-  );
-}
-
-// Real, signed-in Developer/Admin-only floating widget - shows EGPA's own
-// architecture with the 9 audited backlog gaps drawn onto the exact node or
-// edge each one touches, and lights up (with real motion) whichever flow
-// just had a genuine request - anyone's, anywhere in the org, via the real
-// SSE feed at /api/architecture-activity/events (see publishFlowActivity
-// call sites). Not a scripted demo loop. Internal/dev-facing (file paths,
-// route names, unbuilt features named outright), so gated the same as
+// Real, signed-in Developer/Admin-only floating widget - defaults to
+// showing only the current page's own real architecture (see pathToFlow),
+// and lights up (with real motion and the real tool/model/error behind it)
+// whichever flow just had a genuine request - anyone's, anywhere in the
+// org, via the real SSE feed at /api/architecture-activity/events (see
+// publishFlowActivity call sites). Not a scripted demo loop. Internal/
+// dev-facing (file paths, route names, unbuilt features named outright),
+// so gated the same as
 // Agentic System / Model Builder rather than shown to every signed-in role.
 export function ArchitectureDiagramWidget() {
   const { user } = useAuth();
+  const pathname = usePathname();
+  const routeFlow = useMemo(() => pathToFlow(pathname ?? "/"), [pathname]);
   const [open, setOpen] = useState(false);
-  const [activeFlow, setActiveFlow] = useState<FlowId>("all");
+  // A manual click pins a flow (or "all") until you navigate away; null
+  // means "no manual pin, follow the current page." Kept separate from the
+  // live SSE flow so "Resume live" and route changes both behave sanely.
+  const [pinnedFlow, setPinnedFlow] = useState<FlowId | null>(null);
+  const [liveFlow, setLiveFlow] = useState<FlowId | null>(null);
   const [activePhase, setActivePhase] = useState<string | null>(null);
+  const [activeDetail, setActiveDetail] = useState<string | null>(null);
   const [live, setLive] = useState(true);
   const [connected, setConnected] = useState(false);
   const fadeTimer = useRef<number | null>(null);
+
+  // Every page has its own real flow (Discovery page -> the discovery flow,
+  // Gate page -> the gate flow, ...) so the widget defaults to showing THAT
+  // page's architecture the moment it opens, instead of "All" everywhere.
+  // Navigating clears any manual pin so the new page's own flow takes over.
+  // Adjusting state during render (comparing against the last seen
+  // pathname) rather than in an effect, per React's documented pattern for
+  // resetting state in response to a changing value - avoids an extra
+  // render pass and the "setState in an effect" lint warning.
+  const [lastPathname, setLastPathname] = useState(pathname);
+  if (lastPathname !== pathname) {
+    setLastPathname(pathname);
+    if (pinnedFlow !== null) setPinnedFlow(null);
+  }
+
+  const activeFlow: FlowId = live ? (liveFlow ?? routeFlow) : (pinnedFlow ?? routeFlow);
 
   // Real, org-wide traffic - every genuine request any signed-in user makes
   // (anywhere, not just this tab) publishes a pulse via publishFlowActivity
@@ -136,6 +143,8 @@ export function ArchitectureDiagramWidget() {
   // routes). Discovery and Agentic System publish once per real sub-phase
   // (thinking / calling a tool / got a result / done), not once per request,
   // so this is a live traffic view of real actions, not a scripted demo.
+  // When a pulse fades (4s), it falls back to the current page's own flow
+  // rather than always resetting to "All".
   useEffect(() => {
     if (!open || !live) return;
     const source = new EventSource("/api/architecture-activity/events");
@@ -143,13 +152,15 @@ export function ArchitectureDiagramWidget() {
     source.onerror = () => setConnected(false);
     source.onmessage = (event) => {
       try {
-        const { flow, phase } = JSON.parse(event.data) as { flow: ArchitectureFlow; phase?: string };
-        setActiveFlow(flow);
+        const { flow, phase, detail } = JSON.parse(event.data) as { flow: ArchitectureFlow; phase?: string; detail?: string };
+        setLiveFlow(flow);
         setActivePhase(phase ?? null);
+        setActiveDetail(detail ?? null);
         if (fadeTimer.current) window.clearTimeout(fadeTimer.current);
         fadeTimer.current = window.setTimeout(() => {
-          setActiveFlow("all");
+          setLiveFlow(null);
           setActivePhase(null);
+          setActiveDetail(null);
         }, 4000);
       } catch {
         // Skip a malformed event rather than crash the subscription.
@@ -166,20 +177,22 @@ export function ArchitectureDiagramWidget() {
 
   function pick(flow: FlowId) {
     setLive(false);
-    setActiveFlow(flow);
+    setPinnedFlow(flow);
     setActivePhase(null);
+    setActiveDetail(null);
   }
 
   // Filtering now HIDES non-matching elements outright (not just dims) once
-  // a flow is pinned or live - "click Discovery, see only Discovery's real
-  // architecture," not the whole shared diagram with most of it faded.
+  // a flow is pinned, live, or auto-detected from the current page - opening
+  // the widget on the Discovery page shows only Discovery's real
+  // architecture, with no click required.
   function visible(flows: string): boolean {
     if (activeFlow === "all") return true;
     return flows.split(/\s+/).includes(activeFlow);
   }
 
-  // Every element still rendered when a flow is pinned/live IS that flow, so
-  // it all gets the flow-move/pulse-glow treatment together - no per-element
+  // Every element still rendered when a flow is active IS that flow, so it
+  // all gets the flow-move/pulse-glow treatment together - no per-element
   // "is this the hit one" check needed anymore now that filtering hides
   // rather than dims.
   const activeClass = activeFlow === "all" ? "" : "arch-hit";
@@ -196,12 +209,13 @@ export function ArchitectureDiagramWidget() {
 
       {/* Docked panel, not a full-screen modal - no backdrop capturing
           clicks, so the running page underneath stays visible and fully
-          interactive while this is open. */}
+          interactive while this is open. Translucent + capped footprint so
+          the page behind it stays visible through and around the panel. */}
       {open && (
-        <div className="fixed bottom-5 right-5 z-40 flex max-h-[min(90vh,880px)] w-[min(94vw,1180px)] flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)] shadow-2xl">
-            <div className="flex items-center justify-between border-b border-[var(--border)] bg-[var(--brand)] px-5 py-3.5 text-white">
+        <div className="fixed bottom-5 right-5 z-40 flex max-h-[min(80vh,680px)] w-[min(92vw,760px)] flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)]/90 shadow-2xl backdrop-blur-md">
+            <div className="flex items-center justify-between border-b border-[var(--border)] bg-[var(--brand)]/90 px-5 py-3.5 text-white backdrop-blur-md">
               <div>
-                <span className="text-sm font-semibold">EGPA Architecture &mdash; Backlog Mapped In Place</span>
+                <span className="text-sm font-semibold">EGPA Architecture &mdash; This Page, Live</span>
                 <p className="text-xs text-white/70">Developer/Admin only &mdash; internal, not for end users</p>
               </div>
               <button onClick={() => setOpen(false)} className="text-white/80 hover:text-white" aria-label="Close architecture diagram">
@@ -234,24 +248,28 @@ export function ArchitectureDiagramWidget() {
                 ))}
               </div>
 
-              <p className="mt-3 flex items-center gap-2 text-xs text-[var(--muted)]">
+              <p className="mt-3 flex flex-wrap items-center gap-2 text-xs text-[var(--muted)]">
                 <span className="arch-dotpulse h-1.5 w-1.5 flex-none rounded-full bg-[var(--tier-medium)]" data-live={live ? "1" : "0"} />
                 {live
-                  ? connected
-                    ? activeFlow === "all"
-                      ? "Live — watching real org-wide traffic…"
-                      : `Live: ${FLOW_LABELS[activeFlow as ArchitectureFlow]}${activePhase && PHASE_LABELS[activePhase] ? ` — ${PHASE_LABELS[activePhase]}` : " just happened"}`
-                    : "Connecting to live traffic…"
+                  ? liveFlow
+                    ? `Live: ${FLOW_LABELS[liveFlow as ArchitectureFlow]}${activePhase && PHASE_LABELS[activePhase] ? ` — ${PHASE_LABELS[activePhase]}` : " just happened"}${activeDetail ? ` (${activeDetail})` : ""}`
+                    : connected
+                      ? routeFlow === "all"
+                        ? "Watching real org-wide traffic…"
+                        : `This page: ${FLOW_LABELS[routeFlow as ArchitectureFlow]} — watching for real activity`
+                      : "Connecting to live traffic…"
                   : activeFlow === "all"
-                    ? "Showing everything, unfiltered."
-                    : `Pinned: ${FLOW_LABELS[activeFlow as ArchitectureFlow]} — showing only this flow`}
+                    ? "Paused — showing everything, unfiltered."
+                    : pinnedFlow
+                      ? `Pinned: ${FLOW_LABELS[activeFlow as ArchitectureFlow]} — showing only this flow`
+                      : `This page (paused): ${FLOW_LABELS[activeFlow as ArchitectureFlow]}`}
                 <button type="button" onClick={() => setLive((l) => !l)} className="font-semibold text-[var(--series-1)] underline underline-offset-2">
                   {live ? "Pause" : "Resume live"}
                 </button>
               </p>
 
               <div className={`arch-diagram mt-4 overflow-x-auto rounded-lg border border-[var(--border)] bg-[var(--background)] p-4 ${activeFlow !== "all" ? "filtered" : ""}`}>
-                <svg viewBox="0 0 1560 830" className="block min-w-[1240px]" role="img" aria-label="EGPA architecture diagram with the 9 backlog gaps mapped onto the real client, server, and data-layer components they touch.">
+                <svg viewBox="0 0 1560 830" className="block min-w-[1240px]" role="img" aria-label="EGPA architecture diagram of the real client, server, and data-layer components involved in the current flow.">
                   <defs>
                     <marker id="wa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
                       <path d="M0,0 L10,5 L0,10 z" fill="currentColor" />
@@ -352,7 +370,6 @@ export function ArchitectureDiagramWidget() {
                       <rect x="40" y={row.y} width="190" height={56} rx="8" fill={CLIENT} fillOpacity={0.08} stroke={CLIENT} strokeWidth={1.4} strokeDasharray={row.clientDashed ? "4 3" : undefined} />
                       <text x="135" y={row.y + (row.clientSub ? 27 : 33)} textAnchor="middle" fontSize="12.5" fontWeight="600" fill={CLIENT}>{row.clientLabel}</text>
                       {row.clientSub && <text x="135" y={row.y + 43} textAnchor="middle" fontSize="9.5" fill="var(--muted)">{row.clientSub}</text>}
-                      {row.markerOnClient && row.marker && <Marker cx={221} cy={row.y + 8} n={row.marker} filled={row.markerFilled} />}
 
                       <rect x="330" y={row.y} width="210" height="56" rx="8" fill={SERVER} fillOpacity={0.08} stroke={SERVER} strokeWidth={1.4} />
                       {row.serverLines ? (
@@ -367,12 +384,9 @@ export function ArchitectureDiagramWidget() {
                           <text x="435" y={row.y + 40} textAnchor="middle" fontSize="9.5" fill="var(--muted)">{row.serverSub}</text>
                         </>
                       )}
-                      {!row.markerOnClient && row.marker && <Marker cx={530} cy={row.y + 8} n={row.marker} filled={row.markerFilled} />}
-
                       <path d={`M230,${row.y + 28} L330,${row.y + 28}`} stroke="var(--foreground)" strokeWidth={1.3} fill="none" markerEnd="url(#wa)" />
                       <text x={row.flow === "execute" ? 245 : 240} y={row.y + 20} fontSize="9.5" fill="var(--muted)">{row.arrowLabel}</text>
 
-                      {row.flow === "discovery" && <Marker cx={283} cy={row.y + 28} n={2} filled />}
                       {row.flow === "execute" && (
                         <>
                           <path d="M540,346 C 600,420 610,600 650,656" stroke={DATA} strokeWidth={1.3} fill="none" markerEnd="url(#wa)" />
@@ -386,7 +400,6 @@ export function ArchitectureDiagramWidget() {
                           <rect x="330" y="536" width="210" height="40" rx="8" fill="none" stroke={ACCENT} strokeWidth={1.6} strokeDasharray="5 4" />
                           <text x="435" y="553" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="10" fontWeight="700" fill={ACCENT}>/admin/knowledge-base</text>
                           <text x="435" y="567" textAnchor="middle" fontSize="9" fill={ACCENT}>(proposed)</text>
-                          <Marker cx={536} cy={540} n={9} filled />
                           <path d="M435,526 L435,536" stroke={ACCENT} strokeWidth={1.6} strokeDasharray="4 3" fill="none" markerEnd="url(#waAccent)" />
                           <path d="M540,556 C 600,556 610,562 650,566" stroke={ACCENT} strokeWidth={1.6} strokeDasharray="4 3" fill="none" markerEnd="url(#waAccent)" />
                           <text x="558" y="549" fontSize="9" fill={ACCENT}>embed (Cohere) &#8594; upsert vectors</text>
@@ -405,7 +418,6 @@ export function ArchitectureDiagramWidget() {
                       <rect x="330" y="690" width="210" height="52" rx="8" fill={SERVER} fillOpacity={0.08} stroke={SERVER} strokeWidth={1.4} />
                       <text x="435" y="710" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="10" fontWeight="700" fill={SERVER}>.../evidence-export</text>
                       <text x="435" y="726" textAnchor="middle" fontSize="9.5" fill="var(--muted)">evidence-export/route.ts</text>
-                      <Marker cx={530} cy={698} n={6} />
                       <path d="M230,255 C 275,255 275,700 330,714" stroke="var(--foreground)" strokeWidth={1.1} fill="none" markerEnd="url(#wa)" opacity={0.7} />
                       <text x="283" y="572" fontSize="9" fill="var(--muted)">download evidence</text>
                     </g>
@@ -433,26 +445,7 @@ export function ArchitectureDiagramWidget() {
                 <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full" style={{ background: CLIENT }} />Client</span>
                 <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full" style={{ background: SERVER }} />Server / API route</span>
                 <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full" style={{ background: DATA }} />Data store / Gateway</span>
-                <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full border" style={{ borderColor: ACCENT, background: "var(--tier-medium-bg)" }} />Gap — small/medium</span>
-                <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full" style={{ background: ACCENT }} />Gap — large / new component</span>
-              </div>
-
-              <div className="mt-6 border-t border-[var(--border)] pt-4">
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">The nine items, in place</h3>
-                <div className="mt-3 space-y-2">
-                  {GAPS.map((g) => (
-                    <div key={g.n} className="flex flex-wrap items-start justify-between gap-2 rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-xs">
-                      <span className="flex gap-2.5">
-                        <span className="flex h-5 w-5 flex-none items-center justify-center rounded-full bg-[var(--tier-medium-bg)] text-[10px] font-bold text-[var(--tier-medium)]">{g.n}</span>
-                        <span>
-                          {g.text}
-                          <span className="ml-1.5 font-mono text-[var(--muted)]">&mdash; {g.where}</span>
-                        </span>
-                      </span>
-                      <span className={`flex-none rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${EFFORT_STYLE[g.effort]}`}>{g.effort}</span>
-                    </div>
-                  ))}
-                </div>
+                <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full border" style={{ borderColor: ACCENT, background: "var(--tier-medium-bg)" }} />Proposed &mdash; not built yet</span>
               </div>
             </div>
         </div>

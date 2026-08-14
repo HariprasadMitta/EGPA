@@ -31,9 +31,15 @@ export type ArchitectureFlow =
 // the org-wide widget can show each real action, not one blob per request.
 // Absent for single-shot flows (gate, admin, evidence, ...) that have no
 // meaningful sub-steps to report.
+//
+// `detail` carries the real specific behind that phase - which tool was
+// actually called (toolName), which model actually answered (provider), or
+// the actual error text - not just the generic phase name. Absent when a
+// phase has no extra specific worth showing (thinking, done).
 export interface FlowActivityEvent {
   flow: ArchitectureFlow;
   phase?: string;
+  detail?: string;
 }
 
 const ACTIVITY_CHANNEL = "architecture-flow-activity";
@@ -112,9 +118,9 @@ export async function subscribeToUseCaseUpdates(
 // Fire-and-forget on purpose - a route's real work (a chat turn, a gate
 // action, an agent step) must never fail or slow down because the activity
 // pulse couldn't publish. Errors are logged, never thrown.
-export function publishFlowActivity(flow: ArchitectureFlow, phase?: string): void {
+export function publishFlowActivity(flow: ArchitectureFlow, phase?: string, detail?: string): void {
   getPublisher()
-    .publish(ACTIVITY_CHANNEL, JSON.stringify({ flow, phase } satisfies FlowActivityEvent))
+    .publish(ACTIVITY_CHANNEL, JSON.stringify({ flow, phase, detail } satisfies FlowActivityEvent))
     .catch((err) => logError("eventBus.publishFlowActivity", err));
 }
 

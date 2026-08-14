@@ -55,9 +55,18 @@ export async function POST(request: Request) {
           // token stream) so the org-wide Architecture widget can show each
           // real action live, same phases this page's own SSE stream
           // already carries - which LangGraph node is active, when the one
-          // real tool call fires, model attribution, done.
+          // real tool call fires, model attribution, done. `detail` carries
+          // the real tool name / model name / error text behind that phase.
           if (event.type !== "token") {
-            publishFlowActivity("execute", event.type === "node" ? `node:${event.node}` : event.type);
+            const detail =
+              event.type === "tool_call" || event.type === "tool_result"
+                ? event.toolName
+                : event.type === "model"
+                  ? event.provider
+                  : event.type === "error"
+                    ? event.error
+                    : undefined;
+            publishFlowActivity("execute", event.type === "node" ? `node:${event.node}` : event.type, detail);
           }
           if (event.type === "done") executionLimiter.record(ip);
         }
