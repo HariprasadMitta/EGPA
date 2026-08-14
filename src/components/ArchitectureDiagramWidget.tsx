@@ -219,8 +219,14 @@ export function ArchitectureDiagramWidget() {
     function onMove(e: PointerEvent) {
       const start = resizeStart.current;
       if (!start) return;
-      const maxW = Math.min(window.innerWidth * 0.96, 1400);
-      const maxH = Math.min(window.innerHeight * 0.92, 900);
+      // Capped well under the viewport (not just under some large fixed
+      // number) so even fully dragged-out, real page content stays visible
+      // on both sides - a 1400px ceiling looked fine on a wide monitor but
+      // covered nearly the whole window on a normal laptop screen, which
+      // is exactly the "blocks the page" regression this panel was built
+      // to avoid in the first place.
+      const maxW = Math.min(window.innerWidth * 0.65, 900);
+      const maxH = Math.min(window.innerHeight * 0.75, 700);
       const width = Math.min(maxW, Math.max(WIDGET_MIN_WIDTH, start.width + (start.x - e.clientX)));
       const height = Math.min(maxH, Math.max(WIDGET_MIN_HEIGHT, start.height + (start.y - e.clientY)));
       setSize({ width, height });
