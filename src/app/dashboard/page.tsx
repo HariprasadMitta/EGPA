@@ -98,6 +98,101 @@ function formatDuration(seconds: number | null): string {
   return `${(seconds / 3600).toFixed(1)}h`;
 }
 
+function formatProcessingTime(ms: number): string {
+  const seconds = ms / 1000;
+  if (seconds < 60) return `${seconds.toFixed(1)}s`;
+  if (seconds < 3600) return `${(seconds / 60).toFixed(1)}m`;
+  return `${(seconds / 3600).toFixed(1)}h`;
+}
+
+interface UserConsumptionRow {
+  userId: string;
+  name: string;
+  email: string;
+  role: string;
+  executionCount: number;
+  dryRunExecutionCount: number;
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  totalCostUsd: number;
+  totalProcessingTimeMs: number;
+}
+
+// Real per-person usage - moved here from Admin so it lives alongside the
+// rest of Observability's real cross-portfolio metrics instead of being
+// buried in platform configuration. Still admin-only (individual
+// tokens/cost is per-person data, not something every signed-in user
+// should see), same gate the rest of this page already uses for
+// Model Builder connections below.
+function UserConsumptionSection() {
+  const { user } = useAuth();
+  const [rows, setRows] = useState<UserConsumptionRow[]>([]);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/admin/user-consumption")
+      .then((r) => r.json())
+      .then((d) => {
+        setRows(d.users ?? []);
+        setLoaded(true);
+      });
+  }, []);
+
+  if (!user || user.role !== "admin") return null;
+
+  return (
+    <div className="mt-8 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6">
+      <h2 className="text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">
+        Per-user consumption
+      </h2>
+      <p className="mt-1 text-xs text-[var(--muted)]">
+        Real tokens, cost, and agent processing time per person - summed from every real
+        ExecutionRun their use cases produced. This is processing time, not session/login time -
+        this app doesn&apos;t track how long anyone is actually active in the browser.
+      </p>
+      <div className="mt-4 overflow-x-auto">
+        <table className="w-full text-left text-sm">
+          <thead className="border-b border-[var(--border)] text-xs uppercase tracking-wide text-[var(--muted)]">
+            <tr>
+              <th className="py-2 pr-4">User</th>
+              <th className="py-2 pr-4">Executions</th>
+              <th className="py-2 pr-4">Tokens (in / out)</th>
+              <th className="py-2 pr-4">Real cost</th>
+              <th className="py-2 pr-4">Processing time</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.userId} className="border-b border-[var(--border)] last:border-0">
+                <td className="py-2 pr-4">
+                  <span className="font-semibold">{r.name}</span>{" "}
+                  <span className="text-xs text-[var(--muted)]">
+                    {r.email} &middot; {r.role}
+                  </span>
+                </td>
+                <td className="py-2 pr-4">
+                  {r.executionCount}
+                  {r.dryRunExecutionCount > 0 && (
+                    <span className="text-xs text-[var(--muted)]"> ({r.dryRunExecutionCount} dry-run)</span>
+                  )}
+                </td>
+                <td className="py-2 pr-4">
+                  {r.totalInputTokens.toLocaleString("en-US")} / {r.totalOutputTokens.toLocaleString("en-US")}
+                </td>
+                <td className="py-2 pr-4">${r.totalCostUsd.toFixed(4)}</td>
+                <td className="py-2 pr-4">{formatProcessingTime(r.totalProcessingTimeMs)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {loaded && rows.length === 0 && (
+          <p className="py-4 text-sm text-[var(--muted)]">No one has run a real execution yet.</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ~4GB RAM per CU, matching Neon's own "0.25 CU (~1 GB RAM)" display
 // convention on their real Monitoring page.
 function cuToRamLabel(cu: number): string {
@@ -724,6 +819,7 @@ export default function DashboardPage() {
       </div>
 
       <PortfolioObservability />
+      <UserConsumptionSection />
 
       {user && canAccessDeveloperTools(user.role) && (
         <div className="mt-8 rounded-xl border border-[var(--status-done)]/30 bg-[var(--surface)] p-5">
