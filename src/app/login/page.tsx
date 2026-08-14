@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { getSession, signIn } from "next-auth/react";
+import { signIn } from "next-auth/react";
 import { useAuth } from "@/lib/auth";
 
 export default function LoginPage() {
@@ -13,14 +13,11 @@ export default function LoginPage() {
   const [submitting, setSubmitting] = useState(false);
 
   // Already signed in (e.g. navigated back here manually, or a stale tab) -
-  // don't show a sign-in form for a session that already exists. Depends on
-  // user?.role (a stable primitive), not the user object itself - useAuth()
-  // returns a new object literal every render.
-  const userRole = user?.role;
+  // don't show a sign-in form for a session that already exists.
   useEffect(() => {
-    if (!userRole) return;
-    window.location.href = userRole === "developer" || userRole === "arb" || userRole === "admin" ? "/portfolio" : "/intake";
-  }, [userRole]);
+    if (!user) return;
+    window.location.href = "/";
+  }, [user]);
 
   if (user) return null;
 
@@ -44,14 +41,12 @@ export default function LoginPage() {
         return;
       }
 
-      const session = await getSession();
-      const role = session?.user?.role;
       // Hard navigation, not router.push: right after signIn() resolves,
       // the session cookie is set but a client-side soft transition can
       // race the proxy/middleware's read of it in production, silently
       // bouncing back to this same page with no visible error. A full
       // request always sees the cookie that was just committed.
-      window.location.href = role === "developer" || role === "arb" || role === "admin" ? "/portfolio" : "/intake";
+      window.location.href = "/";
     } finally {
       setSubmitting(false);
     }
@@ -114,7 +109,7 @@ export default function LoginPage() {
             </div>
             <button
               type="button"
-              onClick={() => signIn("google", { callbackUrl: "/portfolio" })}
+              onClick={() => signIn("google", { callbackUrl: "/" })}
               className="w-full rounded-full border border-[var(--border)] bg-[var(--background)] px-6 py-3 text-sm font-semibold transition-colors hover:bg-[var(--surface)]"
             >
               Sign in with Google (SSO)

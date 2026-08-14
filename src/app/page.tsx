@@ -73,7 +73,7 @@ export default function LandingPage() {
               <li className="flex gap-3">
                 <span
                   className="mt-0.5 h-5 w-5 flex-none rounded-full text-center text-xs font-bold text-white"
-                  style={{ backgroundColor: "var(--series-7)" }}
+                  style={{ backgroundColor: "var(--series-1)" }}
                 >
                   1
                 </span>
@@ -83,7 +83,10 @@ export default function LandingPage() {
                 </span>
               </li>
               <li className="flex gap-3">
-                <span className="mt-0.5 h-5 w-5 flex-none rounded-full bg-[var(--tier-low-bg)] text-center text-xs font-bold text-[var(--tier-low)]">
+                <span
+                  className="mt-0.5 h-5 w-5 flex-none rounded-full text-center text-xs font-bold text-white"
+                  style={{ backgroundColor: "var(--series-3)" }}
+                >
                   2
                 </span>
                 <span>
@@ -92,7 +95,10 @@ export default function LandingPage() {
                 </span>
               </li>
               <li className="flex gap-3">
-                <span className="mt-0.5 h-5 w-5 flex-none rounded-full bg-[var(--tier-medium-bg)] text-center text-xs font-bold text-[var(--tier-medium)]">
+                <span
+                  className="mt-0.5 h-5 w-5 flex-none rounded-full text-center text-xs font-bold text-white"
+                  style={{ backgroundColor: "var(--series-4)" }}
+                >
                   3
                 </span>
                 <span>
@@ -102,7 +108,10 @@ export default function LandingPage() {
                 </span>
               </li>
               <li className="flex gap-3">
-                <span className="mt-0.5 h-5 w-5 flex-none rounded-full bg-[var(--tier-critical-bg)] text-center text-xs font-bold text-[var(--tier-critical)]">
+                <span
+                  className="mt-0.5 h-5 w-5 flex-none rounded-full text-center text-xs font-bold text-white"
+                  style={{ backgroundColor: "var(--series-7)" }}
+                >
                   4
                 </span>
                 <span>
