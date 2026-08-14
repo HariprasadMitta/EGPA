@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { canAccessDeveloperTools } from "@/lib/roles";
 import { useStore } from "@/lib/store";
@@ -254,15 +254,23 @@ function PortfolioObservability() {
   const [refreshing, setRefreshing] = useState(false);
   const [range, setRange] = useState<TimeRangeKey>("all");
 
-  async function loadAll() {
-    const [summaryRes, systemRes, neonRes, seriesRes, execRes] = await Promise.all([
-      fetch("/api/metrics/summary"),
+  // Summary is fetched separately (with the current range) so the stat
+  // tiles actually update when the range picker changes - the other four
+  // fetches below are range-independent (system/Neon are current-state
+  // snapshots, series/executions carry their own real timestamps and are
+  // filtered client-side).
+  async function loadSummary(r: TimeRangeKey) {
+    const res = await fetch(`/api/metrics/summary?range=${r}`);
+    if (res.ok) setSummary(await res.json());
+  }
+
+  async function loadRest() {
+    const [systemRes, neonRes, seriesRes, execRes] = await Promise.all([
       fetch("/api/metrics/system"),
       fetch("/api/metrics/neon"),
       fetch("/api/metrics/timeseries"),
       fetch("/api/metrics/executions"),
     ]);
-    if (summaryRes.ok) setSummary(await summaryRes.json());
     if (systemRes.ok) setSystem(await systemRes.json());
     if (neonRes.ok) setNeon(await neonRes.json());
     if (seriesRes.ok) setSeries((await seriesRes.json()).series);
@@ -272,18 +280,37 @@ function PortfolioObservability() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      await loadAll();
+      await Promise.all([loadSummary(range), loadRest()]);
       if (!cancelled) setLoading(false);
     })();
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Skips its own first run - the mount effect above already fetches the
+  // initial range's summary, so this only re-fetches on later range changes.
+  const rangeEffectSkippedFirstRun = useRef(false);
+  useEffect(() => {
+    if (!rangeEffectSkippedFirstRun.current) {
+      rangeEffectSkippedFirstRun.current = true;
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const res = await fetch(`/api/metrics/summary?range=${range}`);
+      if (res.ok && !cancelled) setSummary(await res.json());
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [range]);
 
   async function handleRefresh() {
     setRefreshing(true);
     try {
-      await loadAll();
+      await Promise.all([loadSummary(range), loadRest()]);
     } finally {
       setRefreshing(false);
     }

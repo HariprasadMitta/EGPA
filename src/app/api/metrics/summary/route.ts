@@ -8,11 +8,26 @@ export const runtime = "nodejs";
 // visibility, same as Portfolio). Computed in one pass over the real rows
 // rather than several separate aggregate queries, so every number here is
 // guaranteed internally consistent.
-export async function GET() {
+//
+// `range` (24h/7d/all) narrows which executions count via a real
+// startedAt >= cutoff filter - matching the same window the timeseries
+// charts use (see filterByRange in charts.tsx) - so the stat tiles actually
+// change when the Observability page's range picker changes, instead of
+// always showing all-time totals regardless of the selected window.
+export async function GET(request: Request) {
   const session = await auth();
   if (!session?.user) return Response.json({ error: "Sign in required." }, { status: 401 });
 
+  const range = new URL(request.url).searchParams.get("range");
+  const cutoff =
+    range === "24h"
+      ? new Date(Date.now() - 24 * 60 * 60 * 1000)
+      : range === "7d"
+        ? new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+        : null;
+
   const executions = await prisma.executionRun.findMany({
+    where: cutoff ? { startedAt: { gte: cutoff } } : undefined,
     include: {
       steps: true,
       toolCallLogs: true,

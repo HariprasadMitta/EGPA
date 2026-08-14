@@ -38,15 +38,26 @@ const PHASE_LABELS: Record<string, string> = {
 
 // Which real flow a given URL path belongs to, so the widget can default to
 // "this page's own architecture" the moment it opens - no click required.
-// Unmapped pages (portfolio, dashboard, inbox, adr, ...) fall back to "all"
-// since they don't correspond to one single flow.
+// Every page maps to whichever flow its own real API calls actually belong
+// to (see each page's own fetch() calls) rather than only the pages that
+// have their own diagram row - Inbox and ADR both read gate-decision data
+// (action-inbox/route.ts, use-cases/[id]/adr/versions), Model Builder and
+// Model Registry are both admin-config surfaces, Intake feeds directly into
+// producing a Recommendation. Only genuinely cross-flow pages (Portfolio,
+// Observability, the Guide, this app's own architecture-rationale writeup)
+// fall back to "all" - tagging those to one flow would misrepresent them.
 function pathToFlow(pathname: string): FlowId {
   if (pathname.startsWith("/discovery")) return "discovery";
+  if (pathname.startsWith("/intake")) return "recommendation";
   if (pathname.startsWith("/recommendation")) return "recommendation";
   if (pathname.startsWith("/gate")) return "gate";
+  if (pathname.startsWith("/inbox")) return "gate";
+  if (pathname.startsWith("/adr")) return "gate";
   if (pathname.startsWith("/execution")) return "execute";
   if (pathname.startsWith("/governance")) return "governance";
   if (pathname.startsWith("/admin")) return "admin";
+  if (pathname.startsWith("/registry")) return "admin";
+  if (pathname.startsWith("/mlops")) return "admin";
   return "all";
 }
 
@@ -63,6 +74,24 @@ function CloseIcon() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-5 w-5">
       <path d="M18 6 6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+// Windows-style maximize/restore glyphs for the panel-size toggle.
+function MaximizeIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4">
+      <rect x="4" y="4" width="16" height="16" rx="1.5" />
+    </svg>
+  );
+}
+
+function RestoreIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4">
+      <rect x="7" y="7" width="13" height="13" rx="1.5" />
+      <path d="M17 7V5a1.5 1.5 0 0 0-1.5-1.5H5A1.5 1.5 0 0 0 3.5 5v10.5A1.5 1.5 0 0 0 5 17h2" />
     </svg>
   );
 }
@@ -108,6 +137,10 @@ export function ArchitectureDiagramWidget() {
   const pathname = usePathname();
   const routeFlow = useMemo(() => pathToFlow(pathname ?? "/"), [pathname]);
   const [open, setOpen] = useState(false);
+  // Small by default (page underneath stays visible); toggled via the
+  // maximize/restore button next to Close when the full diagram needs
+  // more room to read.
+  const [expanded, setExpanded] = useState(false);
   // A manual click pins a flow (or "all") until you navigate away; null
   // means "no manual pin, follow the current page." Kept separate from the
   // live SSE flow so "Resume live" and route changes both behave sanely.
@@ -209,19 +242,33 @@ export function ArchitectureDiagramWidget() {
 
       {/* Docked panel, not a full-screen modal - no backdrop capturing
           clicks, so the running page underneath stays visible and fully
-          interactive while this is open. Small footprint + translucent so
-          most of the page stays visible through and around the panel - the
-          diagram itself scrolls inside rather than growing the panel. */}
+          interactive while this is open. Small by default + translucent so
+          most of the page stays visible through and around the panel;
+          maximize (next to Close, like a window's title-bar controls) when
+          the full diagram needs more room. */}
       {open && (
-        <div className="fixed bottom-5 right-5 z-40 flex max-h-[min(72vh,560px)] w-[min(85vw,440px)] flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)]/80 shadow-2xl backdrop-blur-sm">
+        <div
+          className={`fixed bottom-5 right-5 z-40 flex flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)]/80 shadow-2xl backdrop-blur-sm ${
+            expanded ? "max-h-[min(88vh,820px)] w-[min(94vw,1180px)]" : "max-h-[min(72vh,560px)] w-[min(85vw,440px)]"
+          }`}
+        >
             <div className="flex items-center justify-between border-b border-[var(--border)] bg-[var(--brand)]/85 px-4 py-2.5 text-white backdrop-blur-sm">
               <div>
                 <span className="text-sm font-semibold">EGPA Architecture &mdash; This Page, Live</span>
                 <p className="text-xs text-white/70">Developer/Admin only &mdash; internal, not for end users</p>
               </div>
-              <button onClick={() => setOpen(false)} className="text-white/80 hover:text-white" aria-label="Close architecture diagram">
-                <CloseIcon />
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setExpanded((e) => !e)}
+                  className="text-white/80 hover:text-white"
+                  aria-label={expanded ? "Restore architecture diagram size" : "Maximize architecture diagram"}
+                >
+                  {expanded ? <RestoreIcon /> : <MaximizeIcon />}
+                </button>
+                <button onClick={() => setOpen(false)} className="text-white/80 hover:text-white" aria-label="Close architecture diagram">
+                  <CloseIcon />
+                </button>
+              </div>
             </div>
 
             <div className="overflow-y-auto p-3">
