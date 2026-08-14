@@ -23,8 +23,17 @@ export type ArchitectureFlow =
   | "help"
   | "evidence";
 
+// `phase` carries the real sub-step for flows with genuine multi-phase
+// internals (Discovery's thinking/tool_call/tool_result/done, Agentic
+// System's node/tool_call/tool_result/model/usage_delta/done) - the exact
+// same vocabulary those pages' own SSE streams already use (see
+// DiscoveryTurnEvent/StepEvent), just re-published on this channel too so
+// the org-wide widget can show each real action, not one blob per request.
+// Absent for single-shot flows (gate, admin, evidence, ...) that have no
+// meaningful sub-steps to report.
 export interface FlowActivityEvent {
   flow: ArchitectureFlow;
+  phase?: string;
 }
 
 const ACTIVITY_CHANNEL = "architecture-flow-activity";
@@ -103,9 +112,9 @@ export async function subscribeToUseCaseUpdates(
 // Fire-and-forget on purpose - a route's real work (a chat turn, a gate
 // action, an agent step) must never fail or slow down because the activity
 // pulse couldn't publish. Errors are logged, never thrown.
-export function publishFlowActivity(flow: ArchitectureFlow): void {
+export function publishFlowActivity(flow: ArchitectureFlow, phase?: string): void {
   getPublisher()
-    .publish(ACTIVITY_CHANNEL, JSON.stringify({ flow } satisfies FlowActivityEvent))
+    .publish(ACTIVITY_CHANNEL, JSON.stringify({ flow, phase } satisfies FlowActivityEvent))
     .catch((err) => logError("eventBus.publishFlowActivity", err));
 }
 

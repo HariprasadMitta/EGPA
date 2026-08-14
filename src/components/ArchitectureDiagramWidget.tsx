@@ -19,6 +19,22 @@ const FLOW_LABELS: Record<ArchitectureFlow, string> = {
 };
 const ALL_FLOWS = Object.keys(FLOW_LABELS) as ArchitectureFlow[];
 
+// Human labels for the real sub-phases Discovery and Agentic System publish
+// (see the phase argument at their publishFlowActivity call sites) - same
+// vocabulary those pages' own SSE streams use, just described in plain
+// English here instead of a raw event-type string.
+const PHASE_LABELS: Record<string, string> = {
+  thinking: "thinking",
+  tool_call: "calling a real tool",
+  tool_result: "got a real result back",
+  done: "done",
+  error: "hit a real error",
+  "node:agent": "planning the next step",
+  "node:tools": "calling a tool",
+  model: "model attributed",
+  usage_delta: "token usage updated",
+};
+
 const GAPS: { n: number; text: string; where: string; effort: "Small" | "Medium" | "Large" }[] = [
   { n: 1, text: "Discovery never asks what governance/ITSM/architecture tooling already exists", where: "discoveryAgent.ts — system prompt", effort: "Small" },
   { n: 2, text: "Discovery's SSE stream is missing node and usage_delta events Execution already has", where: "discoveryAgent.ts — turn runner", effort: "Large" },
@@ -107,6 +123,7 @@ export function ArchitectureDiagramWidget() {
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const [activeFlow, setActiveFlow] = useState<FlowId>("all");
+  const [activePhase, setActivePhase] = useState<string | null>(null);
   const [live, setLive] = useState(true);
   const [connected, setConnected] = useState(false);
   const fadeTimer = useRef<number | null>(null);
@@ -116,7 +133,9 @@ export function ArchitectureDiagramWidget() {
   // at the real point in each route where that work happens (see the call
   // sites: discovery-sessions/messages, recommend, gate, execute-step,
   // business-value, help-chat, evidence-export, a handful of /admin/*
-  // routes). This is a live traffic view, not a scripted demo.
+  // routes). Discovery and Agentic System publish once per real sub-phase
+  // (thinking / calling a tool / got a result / done), not once per request,
+  // so this is a live traffic view of real actions, not a scripted demo.
   useEffect(() => {
     if (!open || !live) return;
     const source = new EventSource("/api/architecture-activity/events");
@@ -124,10 +143,14 @@ export function ArchitectureDiagramWidget() {
     source.onerror = () => setConnected(false);
     source.onmessage = (event) => {
       try {
-        const { flow } = JSON.parse(event.data) as { flow: ArchitectureFlow };
+        const { flow, phase } = JSON.parse(event.data) as { flow: ArchitectureFlow; phase?: string };
         setActiveFlow(flow);
+        setActivePhase(phase ?? null);
         if (fadeTimer.current) window.clearTimeout(fadeTimer.current);
-        fadeTimer.current = window.setTimeout(() => setActiveFlow("all"), 4000);
+        fadeTimer.current = window.setTimeout(() => {
+          setActiveFlow("all");
+          setActivePhase(null);
+        }, 4000);
       } catch {
         // Skip a malformed event rather than crash the subscription.
       }
@@ -144,21 +167,38 @@ export function ArchitectureDiagramWidget() {
   function pick(flow: FlowId) {
     setLive(false);
     setActiveFlow(flow);
+    setActivePhase(null);
   }
 
-  function hit(flows: string): string {
-    if (activeFlow === "all") return "";
-    return flows.split(/\s+/).includes(activeFlow) ? "arch-hit" : "";
+  // Filtering now HIDES non-matching elements outright (not just dims) once
+  // a flow is pinned or live - "click Discovery, see only Discovery's real
+  // architecture," not the whole shared diagram with most of it faded.
+  function visible(flows: string): boolean {
+    if (activeFlow === "all") return true;
+    return flows.split(/\s+/).includes(activeFlow);
   }
+
+  // Every element still rendered when a flow is pinned/live IS that flow, so
+  // it all gets the flow-move/pulse-glow treatment together - no per-element
+  // "is this the hit one" check needed anymore now that filtering hides
+  // rather than dims.
+  const activeClass = activeFlow === "all" ? "" : "arch-hit";
 
   return (
-    <div className="fixed bottom-24 left-5 z-40">
+    <>
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="fixed bottom-24 left-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-[var(--brand)] text-white shadow-lg transition-transform hover:scale-105"
+        aria-label={open ? "Close architecture diagram" : "Open architecture diagram"}
+      >
+        {open ? <CloseIcon /> : <MapIcon />}
+      </button>
+
+      {/* Docked panel, not a full-screen modal - no backdrop capturing
+          clicks, so the running page underneath stays visible and fully
+          interactive while this is open. */}
       {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setOpen(false)}>
-          <div
-            className="flex max-h-[90vh] w-full max-w-6xl flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)] shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
+        <div className="fixed bottom-5 right-5 z-40 flex max-h-[min(90vh,880px)] w-[min(94vw,1180px)] flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)] shadow-2xl">
             <div className="flex items-center justify-between border-b border-[var(--border)] bg-[var(--brand)] px-5 py-3.5 text-white">
               <div>
                 <span className="text-sm font-semibold">EGPA Architecture &mdash; Backlog Mapped In Place</span>
@@ -200,11 +240,11 @@ export function ArchitectureDiagramWidget() {
                   ? connected
                     ? activeFlow === "all"
                       ? "Live — watching real org-wide traffic…"
-                      : `Live: ${FLOW_LABELS[activeFlow as ArchitectureFlow]} just happened`
+                      : `Live: ${FLOW_LABELS[activeFlow as ArchitectureFlow]}${activePhase && PHASE_LABELS[activePhase] ? ` — ${PHASE_LABELS[activePhase]}` : " just happened"}`
                     : "Connecting to live traffic…"
                   : activeFlow === "all"
                     ? "Showing everything, unfiltered."
-                    : `Pinned: ${FLOW_LABELS[activeFlow as ArchitectureFlow]}`}
+                    : `Pinned: ${FLOW_LABELS[activeFlow as ArchitectureFlow]} — showing only this flow`}
                 <button type="button" onClick={() => setLive((l) => !l)} className="font-semibold text-[var(--series-1)] underline underline-offset-2">
                   {live ? "Pause" : "Resume live"}
                 </button>
@@ -228,71 +268,87 @@ export function ArchitectureDiagramWidget() {
                   <text x="1240" y="26" fontFamily="ui-monospace, monospace" fontSize="11" fontWeight="700" letterSpacing="1.5" fill={DATA}>PROVIDERS</text>
 
                   {/* Postgres */}
-                  <g data-flow="discovery recommendation gate execute governance admin evidence" className={hit("discovery recommendation gate execute governance admin evidence")}>
-                    <rect x="650" y="50" width="200" height="476" rx="8" fill={DATA} fillOpacity={0.08} stroke={DATA} strokeWidth={1.4} />
-                    <text x="750" y="76" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="12.5" fontWeight="700" fill={DATA}>Postgres (Prisma)</text>
-                    <text x="750" y="96" textAnchor="middle" fontSize="10.5" fill="var(--muted)">UseCase · Recommendation</text>
-                    <text x="750" y="111" textAnchor="middle" fontSize="10.5" fill="var(--muted)">GovernanceGate · ExecutionRun</text>
-                    <text x="750" y="126" textAnchor="middle" fontSize="10.5" fill="var(--muted)">DiscoverySession · Baseline</text>
-                    <text x="750" y="141" textAnchor="middle" fontSize="10.5" fill="var(--muted)">ModelRegistryEntry</text>
-                  </g>
-                  <g data-flow="admin" className={hit("admin")}>
-                    <text x="750" y="176" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="10" fontWeight="700" fill={ACCENT}>+ KnowledgeBaseDocument</text>
-                    <text x="750" y="190" textAnchor="middle" fontSize="9" fill={ACCENT}>(proposed)</text>
-                  </g>
-                  <text x="750" y="503" textAnchor="middle" fontSize="9" fill="var(--muted)" data-flow="discovery" className={hit("discovery")}>SQL, not vector — search_existing_use_cases</text>
+                  {visible("discovery recommendation gate execute governance admin evidence") && (
+                    <g data-flow="discovery recommendation gate execute governance admin evidence" className={activeClass}>
+                      <rect x="650" y="50" width="200" height="476" rx="8" fill={DATA} fillOpacity={0.08} stroke={DATA} strokeWidth={1.4} />
+                      <text x="750" y="76" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="12.5" fontWeight="700" fill={DATA}>Postgres (Prisma)</text>
+                      <text x="750" y="96" textAnchor="middle" fontSize="10.5" fill="var(--muted)">UseCase · Recommendation</text>
+                      <text x="750" y="111" textAnchor="middle" fontSize="10.5" fill="var(--muted)">GovernanceGate · ExecutionRun</text>
+                      <text x="750" y="126" textAnchor="middle" fontSize="10.5" fill="var(--muted)">DiscoverySession · Baseline</text>
+                      <text x="750" y="141" textAnchor="middle" fontSize="10.5" fill="var(--muted)">ModelRegistryEntry</text>
+                    </g>
+                  )}
+                  {visible("admin") && (
+                    <g data-flow="admin" className={activeClass}>
+                      <text x="750" y="176" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="10" fontWeight="700" fill={ACCENT}>+ KnowledgeBaseDocument</text>
+                      <text x="750" y="190" textAnchor="middle" fontSize="9" fill={ACCENT}>(proposed)</text>
+                    </g>
+                  )}
+                  {visible("discovery") && (
+                    <text x="750" y="503" textAnchor="middle" fontSize="9" fill="var(--muted)" data-flow="discovery" className={activeClass}>SQL, not vector — search_existing_use_cases</text>
+                  )}
 
                   {/* Pinecone + Cohere */}
-                  <g data-flow="execute admin" className={hit("execute admin")}>
-                    <rect x="650" y="554" width="200" height="56" rx="8" fill={DATA} fillOpacity={0.08} stroke={DATA} strokeWidth={1.4} />
-                    <text x="750" y="578" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="12" fontWeight="700" fill={DATA}>Pinecone</text>
-                    <text x="750" y="594" textAnchor="middle" fontSize="10" fill="var(--muted)">egpa-knowledge-base index</text>
-                  </g>
-                  <g data-flow="execute admin" className={hit("execute admin")}>
-                    <rect x="650" y="638" width="200" height="48" rx="8" fill={DATA} fillOpacity={0.08} stroke={DATA} strokeWidth={1.4} />
-                    <text x="750" y="660" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="12" fontWeight="700" fill={DATA}>Cohere</text>
-                    <text x="750" y="675" textAnchor="middle" fontSize="10" fill="var(--muted)">embed-english-v3.0</text>
-                  </g>
+                  {visible("execute admin") && (
+                    <g data-flow="execute admin" className={activeClass}>
+                      <rect x="650" y="554" width="200" height="56" rx="8" fill={DATA} fillOpacity={0.08} stroke={DATA} strokeWidth={1.4} />
+                      <text x="750" y="578" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="12" fontWeight="700" fill={DATA}>Pinecone</text>
+                      <text x="750" y="594" textAnchor="middle" fontSize="10" fill="var(--muted)">egpa-knowledge-base index</text>
+                    </g>
+                  )}
+                  {visible("execute admin") && (
+                    <g data-flow="execute admin" className={activeClass}>
+                      <rect x="650" y="638" width="200" height="48" rx="8" fill={DATA} fillOpacity={0.08} stroke={DATA} strokeWidth={1.4} />
+                      <text x="750" y="660" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="12" fontWeight="700" fill={DATA}>Cohere</text>
+                      <text x="750" y="675" textAnchor="middle" fontSize="10" fill="var(--muted)">embed-english-v3.0</text>
+                    </g>
+                  )}
 
                   {/* Proposed docs index (item 8) */}
-                  <g data-flow="help" className={hit("help")}>
-                    <rect x="650" y="722" width="200" height="52" rx="8" fill="none" stroke={ACCENT} strokeWidth={1.6} strokeDasharray="5 4" />
-                    <text x="750" y="744" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="11.5" fontWeight="700" fill={ACCENT}>Docs index (proposed)</text>
-                    <text x="750" y="760" textAnchor="middle" fontSize="9.5" fill={ACCENT}>separate namespace</text>
-                  </g>
+                  {visible("help") && (
+                    <g data-flow="help" className={activeClass}>
+                      <rect x="650" y="722" width="200" height="52" rx="8" fill="none" stroke={ACCENT} strokeWidth={1.6} strokeDasharray="5 4" />
+                      <text x="750" y="744" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="11.5" fontWeight="700" fill={ACCENT}>Docs index (proposed)</text>
+                      <text x="750" y="760" textAnchor="middle" fontSize="9.5" fill={ACCENT}>separate namespace</text>
+                    </g>
+                  )}
 
                   {/* Gateway */}
-                  <g data-flow="discovery recommendation execute help" className={hit("discovery recommendation execute help")}>
-                    <rect x="960" y="260" width="190" height="130" rx="8" fill={DATA} fillOpacity={0.08} stroke={DATA} strokeWidth={1.4} />
-                    <text x="1055" y="292" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="12.5" fontWeight="700" fill={DATA}>LiteLLM Gateway</text>
-                    <text x="1055" y="310" textAnchor="middle" fontSize="10" fill="var(--muted)">Cloud Run</text>
-                    <text x="1055" y="330" textAnchor="middle" fontSize="10.5" fill="var(--muted)">egpa-primary</text>
-                    <text x="1055" y="346" textAnchor="middle" fontSize="9.5" fill="var(--muted)">+ 3 fallback aliases</text>
-                  </g>
+                  {visible("discovery recommendation execute help") && (
+                    <g data-flow="discovery recommendation execute help" className={activeClass}>
+                      <rect x="960" y="260" width="190" height="130" rx="8" fill={DATA} fillOpacity={0.08} stroke={DATA} strokeWidth={1.4} />
+                      <text x="1055" y="292" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="12.5" fontWeight="700" fill={DATA}>LiteLLM Gateway</text>
+                      <text x="1055" y="310" textAnchor="middle" fontSize="10" fill="var(--muted)">Cloud Run</text>
+                      <text x="1055" y="330" textAnchor="middle" fontSize="10.5" fill="var(--muted)">egpa-primary</text>
+                      <text x="1055" y="346" textAnchor="middle" fontSize="9.5" fill="var(--muted)">+ 3 fallback aliases</text>
+                    </g>
+                  )}
 
                   {/* Providers */}
-                  <g data-flow="discovery recommendation execute help" className={hit("discovery recommendation execute help")}>
-                    <rect x="1240" y="200" width="160" height="46" rx="7" fill={DATA} fillOpacity={0.08} stroke={DATA} strokeWidth={1.2} />
-                    <text x="1320" y="228" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="11" fill={DATA}>OpenRouter</text>
-                    <rect x="1240" y="284" width="160" height="46" rx="7" fill={DATA} fillOpacity={0.08} stroke={DATA} strokeWidth={1.2} strokeDasharray="4 3" />
-                    <text x="1320" y="312" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="11" fill={DATA}>Anthropic</text>
-                    <rect x="1240" y="368" width="160" height="46" rx="7" fill={DATA} fillOpacity={0.08} stroke={DATA} strokeWidth={1.2} strokeDasharray="4 3" />
-                    <text x="1320" y="396" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="11" fill={DATA}>Groq</text>
-                    <rect x="1240" y="452" width="160" height="46" rx="7" fill={DATA} fillOpacity={0.08} stroke={DATA} strokeWidth={1.2} strokeDasharray="4 3" />
-                    <text x="1320" y="480" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="11" fill={DATA}>Gemini</text>
-                    <g stroke={DATA} fill="none">
-                      <path d="M1150,300 L1240,223" strokeWidth={1.6} markerEnd="url(#wa)" />
-                      <path d="M1150,320 L1240,307" strokeWidth={1.2} strokeDasharray="4 3" markerEnd="url(#wa)" />
-                      <path d="M1150,340 L1240,391" strokeWidth={1.2} strokeDasharray="4 3" markerEnd="url(#wa)" />
-                      <path d="M1150,355 L1240,475" strokeWidth={1.2} strokeDasharray="4 3" markerEnd="url(#wa)" />
+                  {visible("discovery recommendation execute help") && (
+                    <g data-flow="discovery recommendation execute help" className={activeClass}>
+                      <rect x="1240" y="200" width="160" height="46" rx="7" fill={DATA} fillOpacity={0.08} stroke={DATA} strokeWidth={1.2} />
+                      <text x="1320" y="228" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="11" fill={DATA}>OpenRouter</text>
+                      <rect x="1240" y="284" width="160" height="46" rx="7" fill={DATA} fillOpacity={0.08} stroke={DATA} strokeWidth={1.2} strokeDasharray="4 3" />
+                      <text x="1320" y="312" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="11" fill={DATA}>Anthropic</text>
+                      <rect x="1240" y="368" width="160" height="46" rx="7" fill={DATA} fillOpacity={0.08} stroke={DATA} strokeWidth={1.2} strokeDasharray="4 3" />
+                      <text x="1320" y="396" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="11" fill={DATA}>Groq</text>
+                      <rect x="1240" y="452" width="160" height="46" rx="7" fill={DATA} fillOpacity={0.08} stroke={DATA} strokeWidth={1.2} strokeDasharray="4 3" />
+                      <text x="1320" y="480" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="11" fill={DATA}>Gemini</text>
+                      <g stroke={DATA} fill="none">
+                        <path d="M1150,300 L1240,223" strokeWidth={1.6} markerEnd="url(#wa)" />
+                        <path d="M1150,320 L1240,307" strokeWidth={1.2} strokeDasharray="4 3" markerEnd="url(#wa)" />
+                        <path d="M1150,340 L1240,391" strokeWidth={1.2} strokeDasharray="4 3" markerEnd="url(#wa)" />
+                        <path d="M1150,355 L1240,475" strokeWidth={1.2} strokeDasharray="4 3" markerEnd="url(#wa)" />
+                      </g>
+                      <text x="1160" y="270" fontSize="9.5" fill="var(--muted)">primary</text>
+                      <text x="1160" y="382" fontSize="9.5" fill="var(--muted)">fallback chain</text>
                     </g>
-                    <text x="1160" y="270" fontSize="9.5" fill="var(--muted)">primary</text>
-                    <text x="1160" y="382" fontSize="9.5" fill="var(--muted)">fallback chain</text>
-                  </g>
+                  )}
 
                   {/* Rows */}
-                  {ROWS.map((row) => (
-                    <g key={row.flow} data-flow={row.flow} className={hit(row.flow)}>
+                  {ROWS.filter((row) => visible(row.flow)).map((row) => (
+                    <g key={row.flow} data-flow={row.flow} className={activeClass}>
                       <rect x="40" y={row.y} width="190" height={56} rx="8" fill={CLIENT} fillOpacity={0.08} stroke={CLIENT} strokeWidth={1.4} strokeDasharray={row.clientDashed ? "4 3" : undefined} />
                       <text x="135" y={row.y + (row.clientSub ? 27 : 33)} textAnchor="middle" fontSize="12.5" fontWeight="600" fill={CLIENT}>{row.clientLabel}</text>
                       {row.clientSub && <text x="135" y={row.y + 43} textAnchor="middle" fontSize="9.5" fill="var(--muted)">{row.clientSub}</text>}
@@ -344,30 +400,32 @@ export function ArchitectureDiagramWidget() {
                   ))}
 
                   {/* Evidence export (own row, triggered from Gate page) */}
-                  <g data-flow="evidence" className={hit("evidence")}>
-                    <rect x="330" y="690" width="210" height="52" rx="8" fill={SERVER} fillOpacity={0.08} stroke={SERVER} strokeWidth={1.4} />
-                    <text x="435" y="710" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="10" fontWeight="700" fill={SERVER}>.../evidence-export</text>
-                    <text x="435" y="726" textAnchor="middle" fontSize="9.5" fill="var(--muted)">evidence-export/route.ts</text>
-                    <Marker cx={530} cy={698} n={6} />
-                    <path d="M230,255 C 275,255 275,700 330,714" stroke="var(--foreground)" strokeWidth={1.1} fill="none" markerEnd="url(#wa)" opacity={0.7} />
-                    <text x="283" y="572" fontSize="9" fill="var(--muted)">download evidence</text>
-                  </g>
+                  {visible("evidence") && (
+                    <g data-flow="evidence" className={activeClass}>
+                      <rect x="330" y="690" width="210" height="52" rx="8" fill={SERVER} fillOpacity={0.08} stroke={SERVER} strokeWidth={1.4} />
+                      <text x="435" y="710" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="10" fontWeight="700" fill={SERVER}>.../evidence-export</text>
+                      <text x="435" y="726" textAnchor="middle" fontSize="9.5" fill="var(--muted)">evidence-export/route.ts</text>
+                      <Marker cx={530} cy={698} n={6} />
+                      <path d="M230,255 C 275,255 275,700 330,714" stroke="var(--foreground)" strokeWidth={1.1} fill="none" markerEnd="url(#wa)" opacity={0.7} />
+                      <text x="283" y="572" fontSize="9" fill="var(--muted)">download evidence</text>
+                    </g>
+                  )}
 
                   {/* Server -> Postgres */}
-                  <path data-flow="discovery" className={hit("discovery")} d="M540,78 L650,78" stroke={SERVER} strokeWidth={1.2} fill="none" markerEnd="url(#wa)" opacity={0.85} />
-                  <path data-flow="recommendation" className={hit("recommendation")} d="M540,162 L650,140" stroke={SERVER} strokeWidth={1.2} fill="none" markerEnd="url(#wa)" opacity={0.85} />
-                  <path data-flow="gate" className={hit("gate")} d="M540,246 L650,200" stroke={SERVER} strokeWidth={1.2} fill="none" markerEnd="url(#wa)" opacity={0.85} />
-                  <path data-flow="execute" className={hit("execute")} d="M540,330 L650,260" stroke={SERVER} strokeWidth={1.2} fill="none" markerEnd="url(#wa)" opacity={0.85} />
-                  <path data-flow="governance" className={hit("governance")} d="M540,414 L650,340" stroke={SERVER} strokeWidth={1.2} fill="none" markerEnd="url(#wa)" opacity={0.85} />
-                  <path data-flow="admin" className={hit("admin")} d="M540,498 L650,410" stroke={SERVER} strokeWidth={1.2} fill="none" markerEnd="url(#wa)" opacity={0.85} />
-                  <path data-flow="evidence" className={hit("evidence")} d="M540,716 C 600,716 610,480 650,470" stroke={SERVER} strokeWidth={1.2} fill="none" markerEnd="url(#wa)" opacity={0.85} />
+                  {visible("discovery") && <path data-flow="discovery" className={activeClass} d="M540,78 L650,78" stroke={SERVER} strokeWidth={1.2} fill="none" markerEnd="url(#wa)" opacity={0.85} />}
+                  {visible("recommendation") && <path data-flow="recommendation" className={activeClass} d="M540,162 L650,140" stroke={SERVER} strokeWidth={1.2} fill="none" markerEnd="url(#wa)" opacity={0.85} />}
+                  {visible("gate") && <path data-flow="gate" className={activeClass} d="M540,246 L650,200" stroke={SERVER} strokeWidth={1.2} fill="none" markerEnd="url(#wa)" opacity={0.85} />}
+                  {visible("execute") && <path data-flow="execute" className={activeClass} d="M540,330 L650,260" stroke={SERVER} strokeWidth={1.2} fill="none" markerEnd="url(#wa)" opacity={0.85} />}
+                  {visible("governance") && <path data-flow="governance" className={activeClass} d="M540,414 L650,340" stroke={SERVER} strokeWidth={1.2} fill="none" markerEnd="url(#wa)" opacity={0.85} />}
+                  {visible("admin") && <path data-flow="admin" className={activeClass} d="M540,498 L650,410" stroke={SERVER} strokeWidth={1.2} fill="none" markerEnd="url(#wa)" opacity={0.85} />}
+                  {visible("evidence") && <path data-flow="evidence" className={activeClass} d="M540,716 C 600,716 610,480 650,470" stroke={SERVER} strokeWidth={1.2} fill="none" markerEnd="url(#wa)" opacity={0.85} />}
 
                   {/* Server -> Gateway */}
-                  <path data-flow="discovery" className={hit("discovery")} d="M540,70 C 800,70 900,280 960,290" stroke={DATA} strokeWidth={1.2} fill="none" markerEnd="url(#wa)" opacity={0.9} />
-                  <path data-flow="recommendation" className={hit("recommendation")} d="M540,154 C 800,154 900,300 960,305" stroke={DATA} strokeWidth={1.2} fill="none" markerEnd="url(#wa)" opacity={0.9} />
-                  <path data-flow="execute" className={hit("execute")} d="M540,318 C 800,318 900,318 960,318" stroke={DATA} strokeWidth={1.2} fill="none" markerEnd="url(#wa)" opacity={0.9} />
-                  <path data-flow="help" className={hit("help")} d="M540,614 C 800,600 900,340 960,335" stroke={DATA} strokeWidth={1.2} fill="none" markerEnd="url(#wa)" opacity={0.9} />
-                  <text x="760" y="290" fontSize="9.5" fill="var(--muted)">chat completion</text>
+                  {visible("discovery") && <path data-flow="discovery" className={activeClass} d="M540,70 C 800,70 900,280 960,290" stroke={DATA} strokeWidth={1.2} fill="none" markerEnd="url(#wa)" opacity={0.9} />}
+                  {visible("recommendation") && <path data-flow="recommendation" className={activeClass} d="M540,154 C 800,154 900,300 960,305" stroke={DATA} strokeWidth={1.2} fill="none" markerEnd="url(#wa)" opacity={0.9} />}
+                  {visible("execute") && <path data-flow="execute" className={activeClass} d="M540,318 C 800,318 900,318 960,318" stroke={DATA} strokeWidth={1.2} fill="none" markerEnd="url(#wa)" opacity={0.9} />}
+                  {visible("help") && <path data-flow="help" className={activeClass} d="M540,614 C 800,600 900,340 960,335" stroke={DATA} strokeWidth={1.2} fill="none" markerEnd="url(#wa)" opacity={0.9} />}
+                  {visible("discovery recommendation") && <text x="760" y="290" fontSize="9.5" fill="var(--muted)">chat completion</text>}
                 </svg>
               </div>
 
@@ -397,16 +455,8 @@ export function ArchitectureDiagramWidget() {
                 </div>
               </div>
             </div>
-          </div>
         </div>
       )}
-      <button
-        onClick={() => setOpen((o) => !o)}
-        className="flex h-14 w-14 items-center justify-center rounded-full bg-[var(--brand)] text-white shadow-lg transition-transform hover:scale-105"
-        aria-label={open ? "Close architecture diagram" : "Open architecture diagram"}
-      >
-        {open ? <CloseIcon /> : <MapIcon />}
-      </button>
-    </div>
+    </>
   );
 }

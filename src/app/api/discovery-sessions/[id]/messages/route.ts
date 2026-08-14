@@ -43,7 +43,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (!message) return Response.json({ error: "message is required." }, { status: 400 });
 
   const history = row.messages as unknown as DiscoveryChatMessage[];
-  publishFlowActivity("discovery");
 
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
@@ -54,6 +53,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
       try {
         for await (const event of runDiscoveryTurn(session.user.id, history, message)) {
+          // Re-published per real phase (not once at request start) so the
+          // org-wide Architecture widget can show each real action live -
+          // thinking, calling search_existing_use_cases, the result coming
+          // back, done - the same phases this page's own SSE stream carries.
+          publishFlowActivity("discovery", event.type);
           if (event.type === "done") {
             const updated = await prisma.problemDiscoverySession.update({
               where: { id },

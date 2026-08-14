@@ -24,7 +24,6 @@ export async function POST(request: Request) {
     return Response.json({ error: "Missing required fields." }, { status: 400 });
   }
   if (!Array.isArray(body.priorSteps)) body.priorSteps = [];
-  publishFlowActivity("execute");
 
   const run = await prisma.executionRun.findUnique({
     where: { id: body.executionId },
@@ -52,6 +51,14 @@ export async function POST(request: Request) {
       try {
         for await (const event of runStep(body)) {
           send(event);
+          // Re-published per real phase (skipping the high-frequency raw
+          // token stream) so the org-wide Architecture widget can show each
+          // real action live, same phases this page's own SSE stream
+          // already carries - which LangGraph node is active, when the one
+          // real tool call fires, model attribution, done.
+          if (event.type !== "token") {
+            publishFlowActivity("execute", event.type === "node" ? `node:${event.node}` : event.type);
+          }
           if (event.type === "done") executionLimiter.record(ip);
         }
       } finally {

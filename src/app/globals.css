@@ -149,23 +149,14 @@ body {
   min-height: 0;
 }
 
-/* Architecture diagram widget (ArchitectureDiagramWidget.tsx) - flow
-   highlighting. Dimmed by default once a flow is picked; matching elements
-   get full opacity plus motion, so a request's real path visibly "lights up"
-   against a dimmed backdrop. */
-[data-flow] {
-  transition: opacity 0.35s ease;
-}
-.arch-diagram.filtered [data-flow] {
-  opacity: 0.14;
-}
-.arch-diagram.filtered [data-flow].arch-hit {
-  opacity: 1;
-}
-
+/* Architecture diagram widget (ArchitectureDiagramWidget.tsx) - a pinned or
+   live flow HIDES every non-matching element outright (conditional render,
+   see visible() in the component), so only real motion is needed here: the
+   elements that do render for that flow get a moving-dash / pulse-glow
+   treatment to read as "live", not a dim/highlight opacity split. */
 @media (prefers-reduced-motion: no-preference) {
-  .arch-diagram.filtered path.arch-hit,
-  .arch-diagram.filtered g.arch-hit path {
+  path.arch-hit,
+  g.arch-hit path {
     stroke-dasharray: 7 5;
     animation: arch-flowmove 0.7s linear infinite;
   }
@@ -175,8 +166,8 @@ body {
     }
   }
 
-  .arch-diagram.filtered rect.arch-hit,
-  .arch-diagram.filtered g.arch-hit > rect {
+  rect.arch-hit,
+  g.arch-hit > rect {
     animation: arch-pulseglow 1.7s ease-in-out infinite;
   }
   @keyframes arch-pulseglow {
