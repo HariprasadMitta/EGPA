@@ -209,11 +209,12 @@ export function ArchitectureDiagramWidget() {
 
       {/* Docked panel, not a full-screen modal - no backdrop capturing
           clicks, so the running page underneath stays visible and fully
-          interactive while this is open. Translucent + capped footprint so
-          the page behind it stays visible through and around the panel. */}
+          interactive while this is open. Small footprint + translucent so
+          most of the page stays visible through and around the panel - the
+          diagram itself scrolls inside rather than growing the panel. */}
       {open && (
-        <div className="fixed bottom-5 right-5 z-40 flex max-h-[min(80vh,680px)] w-[min(92vw,760px)] flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)]/90 shadow-2xl backdrop-blur-md">
-            <div className="flex items-center justify-between border-b border-[var(--border)] bg-[var(--brand)]/90 px-5 py-3.5 text-white backdrop-blur-md">
+        <div className="fixed bottom-5 right-5 z-40 flex max-h-[min(72vh,560px)] w-[min(85vw,440px)] flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)]/80 shadow-2xl backdrop-blur-sm">
+            <div className="flex items-center justify-between border-b border-[var(--border)] bg-[var(--brand)]/85 px-4 py-2.5 text-white backdrop-blur-sm">
               <div>
                 <span className="text-sm font-semibold">EGPA Architecture &mdash; This Page, Live</span>
                 <p className="text-xs text-white/70">Developer/Admin only &mdash; internal, not for end users</p>
@@ -223,12 +224,12 @@ export function ArchitectureDiagramWidget() {
               </button>
             </div>
 
-            <div className="overflow-y-auto p-5">
-              <div className="flex flex-wrap gap-2" role="group" aria-label="Highlight a request type">
+            <div className="overflow-y-auto p-3">
+              <div className="flex flex-wrap gap-1.5" role="group" aria-label="Highlight a request type">
                 <button
                   type="button"
                   onClick={() => pick("all")}
-                  className={`rounded-full border px-3.5 py-1.5 text-xs font-semibold transition-colors ${
+                  className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors ${
                     activeFlow === "all" ? "border-transparent bg-[var(--tier-medium)] text-white" : "border-[var(--border)] bg-[var(--background)] text-[var(--foreground)] hover:border-[var(--series-1)]"
                   }`}
                 >
@@ -239,7 +240,7 @@ export function ArchitectureDiagramWidget() {
                     key={f}
                     type="button"
                     onClick={() => pick(f)}
-                    className={`rounded-full border px-3.5 py-1.5 text-xs font-semibold transition-colors ${
+                    className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors ${
                       activeFlow === f ? "border-transparent bg-[var(--tier-medium)] text-white" : "border-[var(--border)] bg-[var(--background)] text-[var(--foreground)] hover:border-[var(--series-1)]"
                     }`}
                   >
