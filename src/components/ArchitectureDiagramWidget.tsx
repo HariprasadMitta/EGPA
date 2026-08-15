@@ -169,7 +169,6 @@ function ResizeGripIcon() {
 const CLIENT = "var(--series-1)";
 const SERVER = "var(--series-3)";
 const DATA = "var(--series-7)";
-const ACCENT = "var(--tier-medium)";
 
 // Row-by-row Client -> Server boxes, each tagged with the real flow it
 // belongs to.
@@ -190,7 +189,7 @@ const ROWS: {
   { flow: "execute", y: 302, clientLabel: "Agentic System page", clientSub: "AgentLoopVisualizer", serverLabel: "/execute-step", serverSub: "agentStep.ts", arrowLabel: "run step (SSE)" },
   { flow: "governance", y: 386, clientLabel: "Governance page", serverLabel: "governance-posture", serverSub: "business-value/route.ts", serverLines: ["governance-posture", "business-value"], arrowLabel: "fetch posture" },
   { flow: "admin", y: 470, clientLabel: "Admin page", serverLabel: "/admin/*", serverSub: "config, baselines", arrowLabel: "configure" },
-  { flow: "help", y: 600, clientLabel: "Help Chat widget", clientSub: "overlay, every page", clientDashed: true, serverLabel: "/help-chat", serverSub: "guideContent.ts (static)", arrowLabel: "ask" },
+  { flow: "help", y: 600, clientLabel: "Help Chat widget", clientSub: "overlay, every page", clientDashed: true, serverLabel: "/help-chat", serverSub: "help-chat/route.ts", arrowLabel: "ask" },
 ];
 
 // Real, signed-in Developer/Admin-only floating widget - defaults to
@@ -429,9 +428,6 @@ export function ArchitectureDiagramWidget() {
                     <marker id="wa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
                       <path d="M0,0 L10,5 L0,10 z" fill="currentColor" />
                     </marker>
-                    <marker id="waAccent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-                      <path d="M0,0 L10,5 L0,10 z" fill={ACCENT} />
-                    </marker>
                   </defs>
 
                   <text x="40" y="26" fontFamily="ui-monospace, monospace" fontSize="11" fontWeight="700" letterSpacing="1.5" fill={CLIENT}>CLIENT — NEXT.JS PAGES</text>
@@ -460,28 +456,20 @@ export function ArchitectureDiagramWidget() {
                     <text x="750" y="503" textAnchor="middle" fontSize="9" fill="var(--muted)" data-flow="discovery" className={activeClass}>SQL, not vector — search_existing_use_cases</text>
                   )}
 
-                  {/* Pinecone + Cohere */}
-                  {visible("execute admin") && (
-                    <g data-flow="execute admin" className={activeClass}>
+                  {/* Pinecone + Cohere - shared by execute/admin (governance docs) and
+                      help (app docs), each its own namespace within the same index */}
+                  {visible("execute admin help") && (
+                    <g data-flow="execute admin help" className={activeClass}>
                       <rect x="650" y="554" width="200" height="56" rx="8" fill={DATA} fillOpacity={0.08} stroke={DATA} strokeWidth={1.4} />
                       <text x="750" y="578" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="12" fontWeight="700" fill={DATA}>Pinecone</text>
-                      <text x="750" y="594" textAnchor="middle" fontSize="10" fill="var(--muted)">egpa-knowledge-base index</text>
+                      <text x="750" y="594" textAnchor="middle" fontSize="10" fill="var(--muted)">egpa-knowledge-base (2 namespaces)</text>
                     </g>
                   )}
-                  {visible("execute admin") && (
-                    <g data-flow="execute admin" className={activeClass}>
+                  {visible("execute admin help") && (
+                    <g data-flow="execute admin help" className={activeClass}>
                       <rect x="650" y="638" width="200" height="48" rx="8" fill={DATA} fillOpacity={0.08} stroke={DATA} strokeWidth={1.4} />
                       <text x="750" y="660" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="12" fontWeight="700" fill={DATA}>Cohere</text>
                       <text x="750" y="675" textAnchor="middle" fontSize="10" fill="var(--muted)">embed-english-v3.0</text>
-                    </g>
-                  )}
-
-                  {/* Proposed docs index (item 8) */}
-                  {visible("help") && (
-                    <g data-flow="help" className={activeClass}>
-                      <rect x="650" y="722" width="200" height="52" rx="8" fill="none" stroke={ACCENT} strokeWidth={1.6} strokeDasharray="5 4" />
-                      <text x="750" y="744" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="11.5" fontWeight="700" fill={ACCENT}>Docs index (proposed)</text>
-                      <text x="750" y="760" textAnchor="middle" fontSize="9.5" fill={ACCENT}>separate namespace</text>
                     </g>
                   )}
 
@@ -560,9 +548,13 @@ export function ArchitectureDiagramWidget() {
                         </>
                       )}
                       {row.flow === "help" && (
-                        <path d="M540,624 C 610,624 620,730 650,744" stroke={ACCENT} strokeWidth={1.6} strokeDasharray="4 3" fill="none" markerEnd="url(#waAccent)" />
+                        <>
+                          <path d="M540,624 C 590,624 600,650 650,660" stroke={DATA} strokeWidth={1.3} fill="none" markerEnd="url(#wa)" />
+                          <text x="558" y="642" fontSize="9" fill="var(--muted)">embed query (Cohere)</text>
+                          <path d="M750,638 L750,614" stroke={DATA} strokeWidth={1.3} fill="none" markerEnd="url(#wa)" />
+                          <text x="762" y="630" fontSize="9" fill="var(--muted)">search app-docs</text>
+                        </>
                       )}
-                      {row.flow === "help" && <text x="558" y="700" fontSize="9" fill={ACCENT}>search_app_docs (proposed)</text>}
                     </g>
                   ))}
 
@@ -599,7 +591,6 @@ export function ArchitectureDiagramWidget() {
                 <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full" style={{ background: CLIENT }} />Client</span>
                 <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full" style={{ background: SERVER }} />Server / API route</span>
                 <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full" style={{ background: DATA }} />Data store / Gateway</span>
-                <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full border" style={{ borderColor: ACCENT, background: "var(--tier-medium-bg)" }} />Proposed &mdash; not built yet</span>
               </div>
             </div>
         </div>

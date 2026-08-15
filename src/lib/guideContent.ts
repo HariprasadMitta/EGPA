@@ -1,9 +1,10 @@
-// Shared, condensed reference for the Help Assistant (src/app/api/help-chat)
-// - a compact prose summary of the same real pipeline/pages/concepts the
-// Guide page documents in full, kept here as plain text so it can be a
-// system prompt without importing a "use client" page component. Update
-// this alongside src/app/guide/page.tsx when a page's real behavior changes
-// - stale help-bot answers are worse than no help bot.
+// Source content for the Help Assistant's real docs index (search_app_docs,
+// see src/lib/knowledgeBase.ts) - a compact prose summary of the same real
+// pipeline/pages/concepts the Guide page documents in full, kept here as
+// plain text rather than importing a "use client" page component. Update
+// this alongside src/app/guide/page.tsx when a page's real behavior
+// changes, then re-run scripts/seed-app-docs.ts to re-embed it - stale
+// help-bot answers are worse than no help bot.
 export const PLATFORM_GUIDE_CONTEXT = `EGPA (Enterprise Governance Platform for AI) is a real, working governance
 pipeline for AI/agentic use cases - not a mockup. Seven real pages, in order:
 
