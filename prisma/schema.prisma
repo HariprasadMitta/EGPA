@@ -466,6 +466,10 @@ model McpServerEntry {
   allowedRiskTiers String[]
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
+  // Same rule as ModelRegistryEntry.changeReason - a governance decision on
+  // record without why it was made isn't real governance. Nullable only
+  // for rows that predate this field.
+  changeReason     String?
 }
 
 // Real admin-uploaded governance documents in the Pinecone knowledge base -

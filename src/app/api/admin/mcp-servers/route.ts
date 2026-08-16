@@ -18,7 +18,15 @@ export async function POST(request: Request) {
     return Response.json({ error: "Only Admin can add MCP Server entries." }, { status: 403 });
   }
 
-  let body: { id?: string; name?: string; publisher?: string; description?: string; status?: string; allowedRiskTiers?: string[] };
+  let body: {
+    id?: string;
+    name?: string;
+    publisher?: string;
+    description?: string;
+    status?: string;
+    allowedRiskTiers?: string[];
+    changeReason?: string;
+  };
   try {
     body = await request.json();
   } catch {
@@ -26,6 +34,10 @@ export async function POST(request: Request) {
   }
   if (!body.id || !body.name || !body.publisher || !body.description || !body.status) {
     return Response.json({ error: "id, name, publisher, description, and status are required." }, { status: 400 });
+  }
+  const changeReason = body.changeReason?.trim();
+  if (!changeReason) {
+    return Response.json({ error: "A reason is required - why is this MCP server being added at this status/tier scope?" }, { status: 400 });
   }
 
   const entry = await prisma.mcpServerEntry.create({
@@ -36,6 +48,7 @@ export async function POST(request: Request) {
       description: body.description,
       status: body.status,
       allowedRiskTiers: body.allowedRiskTiers ?? [],
+      changeReason,
     },
   });
 

@@ -11,11 +11,16 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   }
 
   const { id } = await params;
-  let body: { status?: string; allowedRiskTiers?: string[] };
+  let body: { status?: string; allowedRiskTiers?: string[]; changeReason?: string };
   try {
     body = await request.json();
   } catch {
     return Response.json({ error: "Invalid request body." }, { status: 400 });
+  }
+
+  const changeReason = body.changeReason?.trim();
+  if (body.status && !changeReason) {
+    return Response.json({ error: "A reason is required when changing an MCP server's status." }, { status: 400 });
   }
 
   const entry = await prisma.mcpServerEntry.update({
@@ -23,6 +28,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     data: {
       ...(body.status ? { status: body.status } : {}),
       ...(body.allowedRiskTiers ? { allowedRiskTiers: body.allowedRiskTiers } : {}),
+      ...(changeReason ? { changeReason } : {}),
     },
   });
 
