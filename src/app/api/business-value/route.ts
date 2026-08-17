@@ -62,6 +62,13 @@ export async function GET() {
   let hoursCounted = 0;
   let totalCostSavedUsd = 0;
   let costCounted = 0;
+  // Real time-to-approval: Intake -> Gate cleared specifically, distinct
+  // from cycleTimeToProduction below (which runs all the way to first
+  // completed execution and so is diluted by build/run time). This is the
+  // number that actually answers "did EGPA make governance itself faster,"
+  // not "how long does the whole pipeline take."
+  let totalApprovalHours = 0;
+  let approvalCounted = 0;
   for (const uc of useCases) {
     const baseline = baselineByTier.get(uc.riskTier);
     const result = computeTimeSaved({
@@ -70,12 +77,17 @@ export async function GET() {
       baselineHours: baseline?.baselineHours ?? null,
       costPerHourUsd: baseline?.costPerHourUsd ?? null,
     });
-    if (!result) continue;
-    totalHoursSaved += result.hoursSaved;
-    hoursCounted += 1;
-    if (result.costSavedUsd != null) {
-      totalCostSavedUsd += result.costSavedUsd;
-      costCounted += 1;
+    if (result) {
+      totalHoursSaved += result.hoursSaved;
+      hoursCounted += 1;
+      if (result.costSavedUsd != null) {
+        totalCostSavedUsd += result.costSavedUsd;
+        costCounted += 1;
+      }
+    }
+    if (uc.gate?.acknowledgedAt) {
+      totalApprovalHours += Math.max(0, (uc.gate.acknowledgedAt.getTime() - uc.createdAt.getTime()) / (1000 * 60 * 60));
+      approvalCounted += 1;
     }
   }
 
@@ -110,6 +122,10 @@ export async function GET() {
   return Response.json({
     timeSaved: { totalHoursSaved, useCasesCounted: hoursCounted },
     costSaved: { totalCostSavedUsd, useCasesCounted: costCounted },
+    approvalTime: {
+      averageHours: approvalCounted > 0 ? totalApprovalHours / approvalCounted : null,
+      useCasesCounted: approvalCounted,
+    },
     modelAdoption: { entries: modelAdoptionEntries, reusedModelCount },
     complianceExposureCaught: {
       piiDetections,

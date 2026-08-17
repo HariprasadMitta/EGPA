@@ -182,6 +182,7 @@ function DelegationsSection({ role }: { role: string }) {
 interface BusinessValueData {
   timeSaved: { totalHoursSaved: number; useCasesCounted: number };
   costSaved: { totalCostSavedUsd: number; useCasesCounted: number };
+  approvalTime: { averageHours: number | null; useCasesCounted: number };
   modelAdoption: { entries: { provider: string; useCaseCount: number }[]; reusedModelCount: number };
   complianceExposureCaught: {
     piiDetections: number;
@@ -223,7 +224,7 @@ function BusinessValueSection() {
 
       {data && (
         <>
-          <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
             <StatTile
               label="Approval time saved"
               value={data.timeSaved.useCasesCounted > 0 ? formatHours(data.timeSaved.totalHoursSaved) : "-"}
@@ -233,6 +234,11 @@ function BusinessValueSection() {
               label="Delivery cost saved"
               value={data.costSaved.useCasesCounted > 0 ? `$${data.costSaved.totalCostSavedUsd.toFixed(2)}` : "-"}
               sub={`across ${data.costSaved.useCasesCounted} use case(s) with a declared cost/hour`}
+            />
+            <StatTile
+              label="Actual time to approval"
+              value={data.approvalTime.averageHours != null ? formatHours(data.approvalTime.averageHours) : "-"}
+              sub={`avg. Intake -> Gate cleared, ${data.approvalTime.useCasesCounted} use case(s)`}
             />
             <StatTile
               label="Cycle time to production"
