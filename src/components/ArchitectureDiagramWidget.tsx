@@ -190,6 +190,7 @@ const ROWS: {
   { flow: "governance", y: 386, clientLabel: "Governance page", serverLabel: "governance-posture", serverSub: "business-value/route.ts", serverLines: ["governance-posture", "business-value"], arrowLabel: "fetch posture" },
   { flow: "admin", y: 470, clientLabel: "Admin page", serverLabel: "/admin/*", serverSub: "config, baselines", arrowLabel: "configure" },
   { flow: "help", y: 600, clientLabel: "Help Chat widget", clientSub: "overlay, every page", clientDashed: true, serverLabel: "/help-chat", serverSub: "help-chat/route.ts", arrowLabel: "ask" },
+  { flow: "evidence", y: 686, clientLabel: "ADR page", clientSub: "evidence export link", serverLabel: ".../evidence-export", serverSub: "evidence-export/route.ts", arrowLabel: "download evidence" },
 ];
 
 // Real, signed-in Developer/Admin-only floating widget - defaults to
@@ -218,14 +219,13 @@ export function ArchitectureDiagramWidget() {
     function onMove(e: PointerEvent) {
       const start = resizeStart.current;
       if (!start) return;
-      // Capped well under the viewport (not just under some large fixed
-      // number) so even fully dragged-out, real page content stays visible
-      // on both sides - a 1400px ceiling looked fine on a wide monitor but
-      // covered nearly the whole window on a normal laptop screen, which
-      // is exactly the "blocks the page" regression this panel was built
-      // to avoid in the first place.
-      const maxW = Math.min(window.innerWidth * 0.65, 900);
-      const maxH = Math.min(window.innerHeight * 0.75, 700);
+      // Uncapped up to the viewport itself (minus the panel's own bottom-5/
+      // right-5 offset, so the dragged edge never runs past the window) -
+      // someone taking a full screenshot of a complex flow needs the option
+      // to drag this out to effectively full screen, not stop at a fraction
+      // of the window.
+      const maxW = window.innerWidth - 40;
+      const maxH = window.innerHeight - 40;
       const width = Math.min(maxW, Math.max(WIDGET_MIN_WIDTH, start.width + (start.x - e.clientX)));
       const height = Math.min(maxH, Math.max(WIDGET_MIN_HEIGHT, start.height + (start.y - e.clientY)));
       setSize({ width, height });
@@ -558,17 +558,6 @@ export function ArchitectureDiagramWidget() {
                     </g>
                   ))}
 
-                  {/* Evidence export (own row, triggered from Gate page) */}
-                  {visible("evidence") && (
-                    <g data-flow="evidence" className={activeClass}>
-                      <rect x="330" y="690" width="210" height="52" rx="8" fill={SERVER} fillOpacity={0.08} stroke={SERVER} strokeWidth={1.4} />
-                      <text x="435" y="710" textAnchor="middle" fontFamily="ui-monospace, monospace" fontSize="10" fontWeight="700" fill={SERVER}>.../evidence-export</text>
-                      <text x="435" y="726" textAnchor="middle" fontSize="9.5" fill="var(--muted)">evidence-export/route.ts</text>
-                      <path d="M230,255 C 275,255 275,700 330,714" stroke="var(--foreground)" strokeWidth={1.1} fill="none" markerEnd="url(#wa)" opacity={0.7} />
-                      <text x="283" y="572" fontSize="9" fill="var(--muted)">download evidence</text>
-                    </g>
-                  )}
-
                   {/* Server -> Postgres */}
                   {visible("discovery") && <path data-flow="discovery" className={activeClass} d="M540,78 L650,78" stroke={SERVER} strokeWidth={1.2} fill="none" markerEnd="url(#wa)" opacity={0.85} />}
                   {visible("recommendation") && <path data-flow="recommendation" className={activeClass} d="M540,162 L650,140" stroke={SERVER} strokeWidth={1.2} fill="none" markerEnd="url(#wa)" opacity={0.85} />}
@@ -576,7 +565,7 @@ export function ArchitectureDiagramWidget() {
                   {visible("execute") && <path data-flow="execute" className={activeClass} d="M540,330 L650,260" stroke={SERVER} strokeWidth={1.2} fill="none" markerEnd="url(#wa)" opacity={0.85} />}
                   {visible("governance") && <path data-flow="governance" className={activeClass} d="M540,414 L650,340" stroke={SERVER} strokeWidth={1.2} fill="none" markerEnd="url(#wa)" opacity={0.85} />}
                   {visible("admin") && <path data-flow="admin" className={activeClass} d="M540,498 L650,410" stroke={SERVER} strokeWidth={1.2} fill="none" markerEnd="url(#wa)" opacity={0.85} />}
-                  {visible("evidence") && <path data-flow="evidence" className={activeClass} d="M540,716 C 600,716 610,480 650,470" stroke={SERVER} strokeWidth={1.2} fill="none" markerEnd="url(#wa)" opacity={0.85} />}
+                  {visible("evidence") && <path data-flow="evidence" className={activeClass} d="M540,714 C 600,714 610,480 650,470" stroke={SERVER} strokeWidth={1.2} fill="none" markerEnd="url(#wa)" opacity={0.85} />}
 
                   {/* Server -> Gateway */}
                   {visible("discovery") && <path data-flow="discovery" className={activeClass} d="M540,70 C 800,70 900,280 960,290" stroke={DATA} strokeWidth={1.2} fill="none" markerEnd="url(#wa)" opacity={0.9} />}
