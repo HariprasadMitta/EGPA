@@ -13,7 +13,6 @@ interface NavLink {
 
 const PIPELINE_LINKS: NavLink[] = [
   { href: "/guide", label: "Guide" },
-  { href: "/roadmap", label: "Roadmap" },
   { href: "/discovery", label: "Discovery" },
   { href: "/intake", label: "Intake" },
   { href: "/portfolio", label: "Portfolio" },
